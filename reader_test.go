@@ -23,14 +23,15 @@ func TestReaderReadEvent(t *testing.T) {
 		wConn.Write(inStream)
 	}()
 
-	eventChan, err := NewReader(ctx, rConn)
+	eventChan, err := newReader(ctx, rConn)
 	if err != nil {
 		t.Errorf("Failed init Reader: %s", err)
+		return
 	}
 
 	n := 0
-	for event := range eventChan {
-		if event == "\r\n" {
+	for reader := range eventChan {
+		if reader.str == "\r\n" {
 			break
 		}
 		n++
@@ -43,8 +44,18 @@ func TestReaderReadEvent(t *testing.T) {
 func TestReaderEarlyCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
-	_, err := NewReader(ctx, nil)
+	_, err := newReader(ctx, nil)
 	if err == nil {
 		t.Errorf("Failed early Reader cancel.")
+	}
+}
+
+func TestReaderContextClose(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	ch, _ := newReader(ctx, nil)
+	cancel()
+	_, ok := <-ch
+	if ok {
+		t.Errorf("Failed to cancel reader")
 	}
 }
