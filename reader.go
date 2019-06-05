@@ -3,9 +3,47 @@ package goami2
 import (
 	"bufio"
 	"context"
+	"errors"
 	"log"
 	"net"
+	"regexp"
+	"time"
 )
+
+// Reads prompt from AMI and blocks. If passed context has no timeout set
+// then default timeout will be 3 sec. Returns nil or error.
+func readPrompt(ctx context.Context, conn net.Conn) (err error) {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+	var cancel context.CancelFunc
+	if _, ok := ctx.Deadline(); !ok {
+		ctx, cancel = context.WithTimeout(ctx, time.Second*3)
+		defer cancel()
+	}
+	ch := make(chan error)
+	go func() {
+		defer close(ch)
+		reader := bufio.NewReader(conn)
+		prompt, err := reader.ReadSlice('\n')
+		if err != nil {
+			ch <- err
+			return
+		}
+		re := regexp.MustCompile(`Asterisk Call Manager/(\d+\.\d+(?:\.\d+)?)\r\n`)
+		if !re.Match(prompt) {
+			ch <- errors.New("Invalid AMI prompt: " + string(prompt))
+			return
+		}
+		ch <- nil
+	}()
+	select {
+	case <-ctx.Done():
+		err = ctx.Err()
+	case err = <-ch:
+	}
+	return
+}
 
 func newReader(ctx context.Context, conn net.Conn) (<-chan string, error) {
 	if ctx.Err() != nil {

@@ -5,6 +5,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
+	"time"
 )
 
 func TestReaderReadEvent(t *testing.T) {
@@ -16,8 +17,6 @@ func TestReaderReadEvent(t *testing.T) {
 	)
 
 	rConn, wConn := net.Pipe()
-	defer rConn.Close()
-	defer wConn.Close()
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 	go func() {
@@ -78,4 +77,40 @@ func TestReaderBuildMessage(t *testing.T) {
 	amiMsg := <-chOut
 	assert.Equal(t, amiMsg.Field("event"), "Newchannel")
 	assert.Equal(t, amiMsg.Type(), Event)
+}
+
+func TestReaderPrompt(t *testing.T) {
+	rConn, wConn := net.Pipe()
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n"))
+	}()
+
+	// prompt is OK
+	err := readPrompt(ctx, rConn)
+	assert.Nil(t, err)
+
+	// prompt Not OK
+	go func() {
+		wConn.Write([]byte("Not good prompt\r\n"))
+	}()
+	err = readPrompt(ctx, rConn)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Not good prompt")
+
+	// early cancel
+	cancel()
+	err = readPrompt(ctx, rConn)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "context canceled")
+}
+
+func TestReaderPromptTimeout(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+	r, w := net.Pipe()
+	defer w.Close()
+	err := readPrompt(ctx, r)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "context deadline exceeded")
 }
