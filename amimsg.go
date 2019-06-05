@@ -40,6 +40,7 @@ func (m *AMIMsg) addFieldOrEOF(str string) (EOF bool) {
 }
 
 func (m *AMIMsg) Field(key string) string {
+	key = strings.ToLower(key)
 	if val, ok := m.f[key]; ok {
 		return val
 	}
@@ -48,4 +49,24 @@ func (m *AMIMsg) Field(key string) string {
 
 func (m *AMIMsg) Type() MsgType {
 	return m.t
+}
+
+func (m *AMIMsg) ActionId() string {
+	return m.Field("ActionId")
+}
+
+func (m *AMIMsg) IsResponse() bool {
+	return m.t == Response
+}
+
+func (m *AMIMsg) IsSuccess() bool {
+	return m.IsResponse() && strings.ToLower(m.Field("response")) == "success"
+}
+
+func (m *AMIMsg) IsEventList() bool {
+	return m.IsResponse() && m.Field("EventList") != ""
+}
+
+func (m *AMIMsg) Message() string {
+	return m.Field("message")
 }
