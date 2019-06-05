@@ -82,7 +82,8 @@ func msgBuilder(ctx context.Context, chIn <-chan string) (<-chan *AMIMsg, error)
 			case <-ctx.Done():
 				return
 			case str := <-chIn:
-				if msg.addFieldOrEOF(str) {
+				msg.addField(str)
+				if msg.isReady() {
 					chOut <- msg
 					msg = NewAMIMsg()
 				}
