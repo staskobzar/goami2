@@ -65,6 +65,10 @@ func (m *AMIMsg) IsResponse() bool {
 	return m.t == Response
 }
 
+func (m *AMIMsg) IsEvent() bool {
+	return m.t == Event
+}
+
 func (m *AMIMsg) IsSuccess() bool {
 	return m.IsResponse() && strings.ToLower(m.Field("response")) == "success"
 }
