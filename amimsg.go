@@ -28,6 +28,9 @@ func (m *AMIMsg) addField(str string) {
 		return
 	}
 	split := strings.SplitN(str, ":", 2)
+	if len(split) < 2 {
+		return
+	}
 	key := strings.ToLower(split[0])
 	val := strings.TrimSpace(split[1])
 	m.f[key] = val
