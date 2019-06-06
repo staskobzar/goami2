@@ -23,3 +23,11 @@ func connPipeline(ctx context.Context, conn net.Conn) (<-chan *AMIMsg, error) {
 	}
 	return chanOut, nil
 }
+
+func connLogin(user, pass string, conn net.Conn, ch <-chan *AMIMsg) bool {
+	action := NewAction()
+	conn.Write(action.Login("admin", "passw0rd"))
+
+	resp := <-ch
+	return resp.IsSuccess()
+}

@@ -1,7 +1,9 @@
 package goami2
 
 import (
+	"bufio"
 	"context"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
@@ -30,11 +32,56 @@ func TestConnectPipeline(t *testing.T) {
 	ev1 := <-ch
 	ev2 := <-ch
 	assert.True(t, ev1.IsEvent())
-	assert.Equal(t, ev1.Field("event"), "FullyBooted")
+	assert.Equal(t, ev1.Field("Event"), "FullyBooted")
 	assert.Equal(t, ev1.Field("status"), "System is Fully Booted")
 	assert.True(t, ev2.IsEvent())
 	assert.Equal(t, ev2.Field("event"), "Newchannel")
-	assert.Equal(t, ev2.Field("exten"), "31337")
+	assert.Equal(t, ev2.Field("Exten"), "31337")
+}
+
+func amiResponseLogin(conn net.Conn, response string) {
+	go func() {
+		scanner := bufio.NewScanner(conn)
+		var actionid string
+		for scanner.Scan() {
+			s := scanner.Text()
+			fmt.Sscanf(s, "ActionID: %s", &actionid)
+			if s == "" {
+				break
+			}
+		}
+		response += "ActionID: " + actionid + "\r\n\r\n"
+		conn.Write([]byte(response))
+	}()
+}
+
+func TestConnectLoginSuccess(t *testing.T) {
+	response := "Response: Success\r\nMessage: Authentication accepted\r\n"
+	wConn, rConn := net.Pipe()
+	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
+
+	ch, err := connPipeline(context.TODO(), rConn)
+	assert.Nil(t, err)
+
+	amiResponseLogin(wConn, response)
+
+	ok := connLogin("admin", "pass", rConn, ch)
+	assert.True(t, ok)
+
+}
+
+func TestConnectLoginFail(t *testing.T) {
+	response := "Response: Error\r\nMessage: Authentication failed\r\n"
+	wConn, rConn := net.Pipe()
+	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
+
+	ch, err := connPipeline(context.TODO(), rConn)
+	assert.Nil(t, err)
+
+	amiResponseLogin(wConn, response)
+
+	ok := connLogin("admin", "pass", rConn, ch)
+	assert.False(t, ok)
 }
 
 func BenchmarkConnectPipelineEvent(b *testing.B) {
