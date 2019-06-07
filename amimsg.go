@@ -60,8 +60,13 @@ func (m *AMIMsg) Type() MsgType {
 	return m.t
 }
 
-func (m *AMIMsg) ActionId() string {
-	return m.Field("ActionId")
+func (m *AMIMsg) ActionId() (string, bool) {
+	id := strings.TrimSpace(m.Field("ActionId"))
+	if id == "" {
+		return "", false
+	} else {
+		return id, true
+	}
 }
 
 func (m *AMIMsg) IsResponse() bool {
@@ -77,7 +82,16 @@ func (m *AMIMsg) IsSuccess() bool {
 }
 
 func (m *AMIMsg) IsEventList() bool {
-	return m.IsResponse() && m.Field("EventList") != ""
+	event := m.Field("EventList")
+	return strings.TrimSpace(event) != ""
+}
+
+func (m *AMIMsg) Event() (string, bool) {
+	event := m.Field("event")
+	if strings.TrimSpace(event) == "" {
+		return "", false
+	}
+	return event, true
 }
 
 func (m *AMIMsg) Message() string {

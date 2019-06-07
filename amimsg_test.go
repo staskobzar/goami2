@@ -22,7 +22,9 @@ func TestAMIMsgEvent(t *testing.T) {
 	assert.Equal(t, msg.Type(), Event)
 	assert.Empty(t, msg.Field("Foo"))
 	assert.Equal(t, msg.Field("Context"), "inbound")
-	assert.Equal(t, msg.ActionId(), "SDY4-12837-123878782")
+	actionid, ok := msg.ActionId()
+	assert.True(t, ok)
+	assert.Equal(t, actionid, "SDY4-12837-123878782")
 }
 
 func TestAMIMsgResponse(t *testing.T) {

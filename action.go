@@ -18,6 +18,7 @@ func NewAction() *Action {
 }
 
 func (a *Action) New(action string) {
+	a.aid = ""
 	a.Reset()
 	a.WriteString("Action: " + action + CRLF)
 	a.writeActionId()
