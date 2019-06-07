@@ -86,6 +86,22 @@ func (m *AMIMsg) IsEventList() bool {
 	return strings.TrimSpace(event) != ""
 }
 
+func (m *AMIMsg) IsEventListStart() bool {
+	if !m.IsSuccess() {
+		return false
+	}
+	if !m.IsEventList() {
+		return false
+	}
+	eventList := m.Field("EventList")
+	return strings.ToLower(eventList) == "start"
+}
+
+func (m *AMIMsg) IsEventListEnd() bool {
+	eventList := m.Field("EventList")
+	return strings.ToLower(eventList) == "complete"
+}
+
 func (m *AMIMsg) Event() (string, bool) {
 	event := m.Field("event")
 	if strings.TrimSpace(event) == "" {

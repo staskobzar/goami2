@@ -6,13 +6,26 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 )
 
 var anyEventKey string = "any-event"
 
+type actionDispatchConsumer struct {
+	ch     chan *AMIMsg
+	isList bool
+}
+
+func newActionDispatchConsumer(ch chan *AMIMsg) *actionDispatchConsumer {
+	return &actionDispatchConsumer{
+		ch:     ch,
+		isList: false,
+	}
+}
+
 type pool struct {
-	actionIDConsumer map[string]chan *AMIMsg
-	eventConsumer    map[string]chan *AMIMsg
+	actionConsumer map[string]*actionDispatchConsumer
+	eventConsumer  map[string]chan *AMIMsg
 }
 
 func (p *pool) responseDispatch(msg *AMIMsg) bool {
@@ -20,10 +33,16 @@ func (p *pool) responseDispatch(msg *AMIMsg) bool {
 	if !ok {
 		return false
 	}
-	respChan, ok := p.actionIDConsumer[actionID]
-	if ok {
-		respChan <- msg
-		return true
+	if respChan, ok := p.actionConsumer[actionID]; ok {
+		respChan.ch <- msg
+		if msg.IsEventListStart() {
+			respChan.isList = true
+		}
+		if !respChan.isList || (respChan.isList && msg.IsEventListEnd()) {
+			close(respChan.ch)
+			delete(p.actionConsumer, actionID)
+			return true
+		}
 	}
 	return false
 }
@@ -46,11 +65,11 @@ func (p *pool) eventDispatch(msg *AMIMsg) {
 }
 
 func (p *pool) addAction(actionId string) chan *AMIMsg {
-	if _, ok := p.actionIDConsumer[actionId]; ok {
+	if _, ok := p.actionConsumer[actionId]; ok {
 		return nil
 	}
 	chMsg := make(chan *AMIMsg)
-	p.actionIDConsumer[actionId] = chMsg
+	p.actionConsumer[actionId] = newActionDispatchConsumer(chMsg)
 	return chMsg
 }
 
@@ -65,7 +84,7 @@ type Client struct {
 // NewClient creates new AMI client and returns client or error
 func NewClient(conn net.Conn) (*Client, error) {
 	p := &pool{
-		make(map[string]chan *AMIMsg),
+		make(map[string]*actionDispatchConsumer),
 		make(map[string]chan *AMIMsg),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -90,6 +109,10 @@ func NewClient(conn net.Conn) (*Client, error) {
 	return c, nil
 }
 
+func (c *Client) Close() {
+	c.cancel()
+}
+
 func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, error) {
 	c.action.New(action)
 	actionId := c.action.ActionId()
@@ -108,11 +131,26 @@ func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, 
 	return ch, nil
 }
 
-func (c *Client) Login(user, pass string) (chan *AMIMsg, error) {
-	f := make(map[string]string)
-	f["Username"] = user
-	f["Secret"] = pass
-	return c.Action("Login", f)
+func (c *Client) Login(user, pass string) error {
+	login := c.action.Login(user, pass)
+	ch := c.p.addAction(c.action.ActionId())
+	if ch == nil {
+		return errors.New("response channel for ActionID already exists")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	c.conn.Write(login)
+	select {
+	case <-ctx.Done():
+		return errors.New("Login timeout.")
+	case resp := <-ch:
+		if resp.IsSuccess() {
+			return nil
+		} else {
+			return errors.New(resp.Message())
+		}
+	}
 }
 
 func (c *Client) dispatch(msg *AMIMsg) {
