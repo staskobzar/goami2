@@ -45,3 +45,18 @@ func TestAMIMsgResponse(t *testing.T) {
 	assert.True(t, resp.IsEventList())
 	assert.Equal(t, resp.Message(), "Channels will follow")
 }
+
+func TestAMIMsgEventNotFound(t *testing.T) {
+	inStream := []string{
+		"Response: Success",
+		"EventList: start",
+		"Message: Channels will follow",
+		"\r\n",
+	}
+	resp := NewAMIMsg()
+	for _, s := range inStream {
+		resp.addField(s)
+	}
+	_, ok := resp.Event()
+	assert.False(t, ok)
+}

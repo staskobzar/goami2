@@ -76,7 +76,7 @@ func (p *pool) addAction(actionId string) chan *AMIMsg {
 type Client struct {
 	p      *pool
 	cancel context.CancelFunc
-	m      sync.RWMutex
+	m      sync.Mutex
 	action *Action
 	conn   net.Conn
 }
@@ -113,16 +113,35 @@ func (c *Client) Close() {
 	c.cancel()
 }
 
+func (c *Client) AnyEvent() (chan *AMIMsg, error) {
+	if _, ok := c.p.eventConsumer[anyEventKey]; ok {
+		return nil, errors.New("any event consumer channel already exists")
+	}
+	chMsg := make(chan *AMIMsg)
+	c.p.eventConsumer[anyEventKey] = chMsg
+	return chMsg, nil
+}
+
+func (c *Client) OnEvent(event string) (chan *AMIMsg, error) {
+	event = strings.ToLower(strings.TrimSpace(event))
+	if _, ok := c.p.eventConsumer[event]; ok {
+		return nil, errors.New("event '" + event + "' consumer channel already exists")
+	}
+	chMsg := make(chan *AMIMsg)
+	c.p.eventConsumer[event] = chMsg
+	return chMsg, nil
+}
+
 func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, error) {
 	c.action.New(action)
-	actionId := c.action.ActionId()
+	actionID := c.action.ActionId()
 
-	if actionId == "" {
+	if actionID == "" {
 		return nil, errors.New("failed to set response channel for empty ActionID")
 	}
-	ch := c.p.addAction(actionId)
+	ch := c.p.addAction(actionID)
 	if ch == nil {
-		return nil, errors.New("response channel for ActionID '" + actionId + "' already exists")
+		return nil, errors.New("response channel for ActionID '" + actionID + "' already exists")
 	}
 	for header, val := range fields {
 		c.action.Field(header, val)
@@ -143,13 +162,12 @@ func (c *Client) Login(user, pass string) error {
 	c.conn.Write(login)
 	select {
 	case <-ctx.Done():
-		return errors.New("Login timeout.")
+		return errors.New("login timeout")
 	case resp := <-ch:
 		if resp.IsSuccess() {
 			return nil
-		} else {
-			return errors.New(resp.Message())
 		}
+		return errors.New(resp.Message())
 	}
 }
 
