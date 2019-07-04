@@ -47,10 +47,14 @@ func TestReaderReadEvent(t *testing.T) {
 		return
 	}
 
-	pack := <-eventChan
-	assert.Contains(t, pack, "Event: Newchannel\r\n")
-	assert.Contains(t, pack, "Exten: 31337\r\n")
-	assert.Contains(t, pack, "Context: inbound\r\n")
+	msg := <-eventChan
+	assert.Equal(t, msg.Type(), Event)
+	assert.True(t, msg.IsEvent())
+	event, ok := msg.Event()
+	assert.True(t, ok)
+	assert.Equal(t, event, "Newchannel")
+	assert.Equal(t, msg.Field("Exten"), "31337")
+	assert.Equal(t, msg.Field("Context"), "inbound")
 }
 
 func TestReaderEarlyCancel(t *testing.T) {
@@ -66,25 +70,6 @@ func TestReaderContextClose(t *testing.T) {
 	cancel()
 	_, ok := <-ch
 	assert.False(t, ok)
-}
-
-func TestReaderBuildMessage(t *testing.T) {
-	inStream := "Event: Newchannel\r\n" +
-		"Channel: PJSIP/misspiggy-00000001\r\n" +
-		"Exten: 31337\r\n" +
-		"Context: inbound\r\n"
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	chIn := make(chan string)
-	chOut, err := msgBuilder(ctx, chIn)
-
-	assert.Nil(t, err)
-	chIn <- inStream
-
-	amiMsg := <-chOut
-	assert.Equal(t, amiMsg.Field("event"), "Newchannel")
-	assert.Equal(t, amiMsg.Type(), Event)
 }
 
 func TestReaderPrompt(t *testing.T) {

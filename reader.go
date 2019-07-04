@@ -57,11 +57,11 @@ func readPrompt(ctx context.Context, conn net.Conn) (err error) {
 	return
 }
 
-func newReader(ctx context.Context, conn net.Conn) (<-chan string, error) {
+func newReader(ctx context.Context, conn net.Conn) (<-chan *AMIMsg, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	ch := make(chan string)
+	ch := make(chan *AMIMsg)
 	go func() {
 		scanner := bufio.NewScanner(conn)
 		scanner.Split(scanAMIMsg)
@@ -76,28 +76,9 @@ func newReader(ctx context.Context, conn net.Conn) (<-chan string, error) {
 					log.Fatalf("Failed to read from connection: %v", err)
 				}
 				pack := scanner.Text()
-				ch <- pack
+				ch <- NewAMIMsg(pack)
 			}
 		}
 	}()
 	return ch, nil
-}
-
-func msgBuilder(ctx context.Context, chIn <-chan string) (<-chan *AMIMsg, error) {
-	if ctx.Err() != nil {
-		return nil, ctx.Err()
-	}
-	chOut := make(chan *AMIMsg)
-	go func() {
-		defer close(chOut)
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case str := <-chIn:
-				chOut <- NewAMIMsg(str)
-			}
-		}
-	}()
-	return chOut, nil
 }

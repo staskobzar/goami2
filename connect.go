@@ -13,11 +13,7 @@ func connPipeline(ctx context.Context, conn net.Conn) (<-chan *AMIMsg, error) {
 		return nil, err
 	}
 
-	chanIn, err := newReader(ctx, conn)
-	if err != nil {
-		return nil, err
-	}
-	chanOut, err := msgBuilder(ctx, chanIn)
+	chanOut, err := newReader(ctx, conn)
 	if err != nil {
 		return nil, err
 	}
