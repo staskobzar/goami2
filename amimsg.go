@@ -13,20 +13,19 @@ const (
 )
 
 type AMIMsg struct {
-	f   map[string]string
-	t   MsgType
-	EOF bool
+	f map[string]string
+	t MsgType
 }
 
-func NewAMIMsg() *AMIMsg {
-	return &AMIMsg{make(map[string]string), Unknown, false}
+func NewAMIMsg(text string) *AMIMsg {
+	msg := &AMIMsg{make(map[string]string), Unknown}
+	for _, str := range strings.Split(text, "\r\n") {
+		msg.addField(str)
+	}
+	return msg
 }
 
 func (m *AMIMsg) addField(str string) {
-	m.EOF = str == "\r\n"
-	if m.EOF {
-		return
-	}
 	split := strings.SplitN(str, ":", 2)
 	if len(split) < 2 {
 		return
@@ -50,10 +49,6 @@ func (m *AMIMsg) Field(key string) string {
 		return val
 	}
 	return ""
-}
-
-func (m *AMIMsg) isReady() bool {
-	return m.EOF
 }
 
 func (m *AMIMsg) Type() MsgType {

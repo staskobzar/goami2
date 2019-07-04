@@ -1,12 +1,30 @@
 package goami2
 
 import (
+	"bufio"
 	"context"
 	"github.com/stretchr/testify/assert"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
+
+func TestScannerSplitFunc(t *testing.T) {
+	input := "Event: FullyBooted\r\nPrivilege: system,all\r\n\r\n" +
+		"Status: Fully Booted\r\n\r\n" +
+		"Response: Success\r\nActionID: foo-bar1\r\n" +
+		"EventList: start\r\nMessage: Queue summary will follow\r\n\r\n"
+	scanner := bufio.NewScanner(strings.NewReader(input))
+
+	scanner.Split(scanAMIMsg)
+
+	count := 0
+	for scanner.Scan() {
+		count++
+	}
+	assert.Equal(t, count, 3)
+}
 
 func TestReaderReadEvent(t *testing.T) {
 	inStream := []byte(
@@ -29,14 +47,10 @@ func TestReaderReadEvent(t *testing.T) {
 		return
 	}
 
-	n, expectedN := 0, 4
-	for str := range eventChan {
-		if str == "\r\n" {
-			break
-		}
-		n++
-	}
-	assert.Equal(t, expectedN, n)
+	pack := <-eventChan
+	assert.Contains(t, pack, "Event: Newchannel\r\n")
+	assert.Contains(t, pack, "Exten: 31337\r\n")
+	assert.Contains(t, pack, "Context: inbound\r\n")
 }
 
 func TestReaderEarlyCancel(t *testing.T) {
@@ -55,13 +69,10 @@ func TestReaderContextClose(t *testing.T) {
 }
 
 func TestReaderBuildMessage(t *testing.T) {
-	inStream := []string{
-		"Event: Newchannel\r\n",
-		"Channel: PJSIP/misspiggy-00000001\r\n",
-		"Exten: 31337\r\n",
-		"Context: inbound\r\n",
-		"\r\n",
-	}
+	inStream := "Event: Newchannel\r\n" +
+		"Channel: PJSIP/misspiggy-00000001\r\n" +
+		"Exten: 31337\r\n" +
+		"Context: inbound\r\n"
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
@@ -69,10 +80,7 @@ func TestReaderBuildMessage(t *testing.T) {
 	chOut, err := msgBuilder(ctx, chIn)
 
 	assert.Nil(t, err)
-
-	for _, s := range inStream {
-		chIn <- s
-	}
+	chIn <- inStream
 
 	amiMsg := <-chOut
 	assert.Equal(t, amiMsg.Field("event"), "Newchannel")

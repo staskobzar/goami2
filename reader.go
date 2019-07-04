@@ -2,6 +2,7 @@ package goami2
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"errors"
 	"log"
@@ -9,6 +10,17 @@ import (
 	"regexp"
 	"time"
 )
+
+func scanAMIMsg(data []byte, atEOF bool) (advance int, token []byte, err error) {
+	if atEOF && len(data) == 0 {
+		return 0, nil, nil
+	}
+	if ix := bytes.Index(data, []byte("\r\n\r\n")); ix >= 0 {
+		return ix + 4, data[:ix+2], nil
+	}
+
+	return 0, nil, nil
+}
 
 // Reads prompt from AMI and blocks. If passed context has no timeout set
 // then default timeout will be 3 sec. Returns nil or error.
@@ -51,18 +63,20 @@ func newReader(ctx context.Context, conn net.Conn) (<-chan string, error) {
 	}
 	ch := make(chan string)
 	go func() {
-		reader := bufio.NewReader(conn)
+		scanner := bufio.NewScanner(conn)
+		scanner.Split(scanAMIMsg)
 		defer close(ch)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				line, err := reader.ReadString('\n')
-				if err != nil {
+				scanner.Scan()
+				if err := scanner.Err(); err != nil {
 					log.Fatalf("Failed to read from connection: %v", err)
 				}
-				ch <- line
+				pack := scanner.Text()
+				ch <- pack
 			}
 		}
 	}()
@@ -76,17 +90,12 @@ func msgBuilder(ctx context.Context, chIn <-chan string) (<-chan *AMIMsg, error)
 	chOut := make(chan *AMIMsg)
 	go func() {
 		defer close(chOut)
-		msg := NewAMIMsg()
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			case str := <-chIn:
-				msg.addField(str)
-				if msg.isReady() {
-					chOut <- msg
-					msg = NewAMIMsg()
-				}
+				chOut <- NewAMIMsg(str)
 			}
 		}
 	}()

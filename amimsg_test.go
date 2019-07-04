@@ -6,19 +6,13 @@ import (
 )
 
 func TestAMIMsgEvent(t *testing.T) {
-	inStream := []string{
-		"Event: Newchannel",
-		"Channel: PJSIP/misspiggy-00000001",
-		"Exten: 31337",
-		"ActionId: SDY4-12837-123878782",
-		"Context: inbound",
-		"\r\n",
-	}
-	msg := NewAMIMsg()
-	for _, s := range inStream {
-		msg.addField(s)
-	}
-	assert.True(t, msg.isReady())
+	inStr := "Event: Newchannel\r\n" +
+		"Channel: PJSIP/misspiggy-00000001\r\n" +
+		"Exten: 31337\r\n" +
+		"ActionId: SDY4-12837-123878782\r\n" +
+		"Context: inbound\r\n"
+
+	msg := NewAMIMsg(inStr)
 	assert.Equal(t, msg.Type(), Event)
 	assert.Empty(t, msg.Field("Foo"))
 	assert.Equal(t, msg.Field("Context"), "inbound")
@@ -28,17 +22,10 @@ func TestAMIMsgEvent(t *testing.T) {
 }
 
 func TestAMIMsgResponse(t *testing.T) {
-	inStream := []string{
-		"Response: Success",
-		"EventList: start",
-		"Message: Channels will follow",
-		"\r\n",
-	}
-	resp := NewAMIMsg()
-	for _, s := range inStream {
-		resp.addField(s)
-	}
-	assert.True(t, resp.isReady())
+	inStr := "Response: Success\r\n" +
+		"EventList: start\r\n" +
+		"Message: Channels will follow\r\n"
+	resp := NewAMIMsg(inStr)
 	assert.Equal(t, resp.Type(), Response)
 	assert.True(t, resp.IsResponse())
 	assert.True(t, resp.IsSuccess())
@@ -47,16 +34,10 @@ func TestAMIMsgResponse(t *testing.T) {
 }
 
 func TestAMIMsgEventNotFound(t *testing.T) {
-	inStream := []string{
-		"Response: Success",
-		"EventList: start",
-		"Message: Channels will follow",
-		"\r\n",
-	}
-	resp := NewAMIMsg()
-	for _, s := range inStream {
-		resp.addField(s)
-	}
+	inStr := "Response: Success\r\n" +
+		"EventList: start\r\n" +
+		"Message: Channels will follow\r\n"
+	resp := NewAMIMsg(inStr)
 	_, ok := resp.Event()
 	assert.False(t, ok)
 }
