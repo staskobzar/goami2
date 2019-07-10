@@ -4,7 +4,8 @@ go:
   - 1.12
 
 before_install:
-  - go get
+  - go get github.com/stretchr/testify/assert
+  - go get ./...
 
 script:
   - go test -race -coverprofile=coverage.txt -covermode=atomic
