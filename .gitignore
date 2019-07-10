@@ -8,6 +8,7 @@
 *.gcno
 *.gcda
 *.gcov
+coverage.txt
 
 ### Go ###
 # Binaries for programs and plugins
