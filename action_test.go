@@ -18,7 +18,7 @@ func actionSingleField(t *testing.T) {
 	action.New("CoreStatus")
 	pack := action.Message()
 	expected := "Action: CoreStatus\r\nActionID: " +
-		action.ActionId() + "\r\n\r\n"
+		action.ActionID() + "\r\n\r\n"
 	assert.Equal(t, string(pack), expected)
 }
 
@@ -31,7 +31,7 @@ func multiHeaders(t *testing.T) {
 	assert.Contains(t, string(pack), "Action: ExtensionState\r\n")
 	assert.Contains(t, string(pack), "Exten: 5522\r\n")
 	assert.Contains(t, string(pack), "Context: default\r\n")
-	assert.Contains(t, string(pack), "ActionID: "+action.ActionId())
+	assert.Contains(t, string(pack), "ActionID: "+action.ActionID())
 }
 
 func TestAction(t *testing.T) {

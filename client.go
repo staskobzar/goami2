@@ -32,7 +32,7 @@ type pool struct {
 func (p *pool) responseDispatch(msg *AMIMsg) bool {
 	p.mux.Lock()
 	defer p.mux.Unlock()
-	actionID, ok := msg.ActionId()
+	actionID, ok := msg.ActionID()
 	if !ok {
 		return false
 	}
@@ -166,7 +166,7 @@ func (c *Client) OnEvent(event string) (chan *AMIMsg, error) {
 // Action send to Asterisk MI.
 func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, error) {
 	c.action.New(action)
-	actionID := c.action.ActionId()
+	actionID := c.action.ActionID()
 
 	if actionID == "" {
 		return nil, errors.New("failed to set response channel for empty ActionID")
@@ -185,7 +185,7 @@ func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, 
 // Login action. Blocking and waits response.
 func (c *Client) Login(user, pass string) error {
 	login := c.action.Login(user, pass)
-	ch := c.p.addAction(c.action.ActionId())
+	ch := c.p.addAction(c.action.ActionID())
 	if ch == nil {
 		return errors.New("response channel for ActionID already exists")
 	}

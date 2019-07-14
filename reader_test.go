@@ -48,7 +48,6 @@ func TestReaderReadEvent(t *testing.T) {
 	}
 
 	msg := <-eventChan
-	assert.Equal(t, msg.Type(), Event)
 	assert.True(t, msg.IsEvent())
 	event, ok := msg.Event()
 	assert.True(t, ok)

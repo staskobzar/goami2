@@ -13,10 +13,10 @@ func TestAMIMsgEvent(t *testing.T) {
 		"Context: inbound\r\n"
 
 	msg := NewAMIMsg(inStr)
-	assert.Equal(t, msg.Type(), Event)
+	assert.True(t, msg.IsEvent())
 	assert.Empty(t, msg.Field("Foo"))
 	assert.Equal(t, msg.Field("Context"), "inbound")
-	actionid, ok := msg.ActionId()
+	actionid, ok := msg.ActionID()
 	assert.True(t, ok)
 	assert.Equal(t, actionid, "SDY4-12837-123878782")
 }
@@ -26,7 +26,6 @@ func TestAMIMsgResponse(t *testing.T) {
 		"EventList: start\r\n" +
 		"Message: Channels will follow\r\n"
 	resp := NewAMIMsg(inStr)
-	assert.Equal(t, resp.Type(), Response)
 	assert.True(t, resp.IsResponse())
 	assert.True(t, resp.IsSuccess())
 	assert.True(t, resp.IsEventList())
