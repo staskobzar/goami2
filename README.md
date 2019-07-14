@@ -27,13 +27,13 @@ func main() {
 	if err != nil {
 		log.Fatalln(err)
 	}
-  defer client.Close()
+	defer client.Close()
 	for {
-    select {
-    case msg := <-ch:
-      log.Printf("Got event: %s\n", msg.Event())
-    }
-  }
+		select {
+		case msg := <-ch:
+			log.Printf("Got event: %s\n", msg.Event())
+		}
+	}
 }
 ```
 
