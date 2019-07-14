@@ -41,10 +41,37 @@ func main() {
 TODO: Improve docs
 ```
 package goami2 // import "github.com/staskobzar/goami2"
+```
+## Client
+```
+type Client struct {
+	// Has unexported fields.
+}
+    Client structure
 
+func NewClient(conn net.Conn) (*Client, error)
+    NewClient creates new AMI client and returns client or error
 
-TYPES
+func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, error)
+    Action send to Asterisk MI.
 
+func (c *Client) AnyEvent() (chan *AMIMsg, error)
+    AnyEvent provides channel for any AMI events received
+
+func (c *Client) Close()
+    Close client and stop all routines
+
+func (c *Client) Login(user, pass string) error
+    Login action. Blocking and waits response.
+
+func (c *Client) OnEvent(event string) (chan *AMIMsg, error)
+    OnEvent provides channel for specific event. Returns error if listener for
+    event already created.
+
+```
+
+## AMIMsg
+```
 type AMIMsg struct {
 	// Has unexported fields.
 }
@@ -82,7 +109,10 @@ func (m *AMIMsg) IsSuccess() bool
 
 func (m *AMIMsg) Message() string
     Message returns value of AMI Message
+```
 
+## Action
+```
 type Action struct {
 	bytes.Buffer
 	// Has unexported fields.
@@ -106,29 +136,4 @@ func (a *Action) Message() []byte
 
 func (a *Action) New(action string)
     New resets buffer and set new Action
-
-type Client struct {
-	// Has unexported fields.
-}
-    Client structure
-
-func NewClient(conn net.Conn) (*Client, error)
-    NewClient creates new AMI client and returns client or error
-
-func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, error)
-    Action send to Asterisk MI.
-
-func (c *Client) AnyEvent() (chan *AMIMsg, error)
-    AnyEvent provides channel for any AMI events received
-
-func (c *Client) Close()
-    Close client and stop all routines
-
-func (c *Client) Login(user, pass string) error
-    Login action. Blocking and waits response.
-
-func (c *Client) OnEvent(event string) (chan *AMIMsg, error)
-    OnEvent provides channel for specific event. Returns error if listener for
-    event already created.
-
 ```
