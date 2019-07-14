@@ -26,9 +26,12 @@ func newActionDispatchConsumer(ch chan *AMIMsg) *actionDispatchConsumer {
 type pool struct {
 	actionConsumer map[string]*actionDispatchConsumer
 	eventConsumer  map[string]chan *AMIMsg
+	mux            sync.Mutex
 }
 
 func (p *pool) responseDispatch(msg *AMIMsg) bool {
+	p.mux.Lock()
+	defer p.mux.Unlock()
 	actionID, ok := msg.ActionId()
 	if !ok {
 		return false
@@ -70,6 +73,8 @@ func (p *pool) matchEvent(event string) (chan<- *AMIMsg, bool) {
 }
 
 func (p *pool) setEventConsumer(event string, chMsg chan *AMIMsg) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
 	p.eventConsumer[event] = chMsg
 }
 
@@ -79,6 +84,8 @@ func (p *pool) matchAction(action string) (*actionDispatchConsumer, bool) {
 }
 
 func (p *pool) addAction(actionID string) chan *AMIMsg {
+	p.mux.Lock()
+	defer p.mux.Unlock()
 	if _, ok := p.matchAction(actionID); ok {
 		return nil
 	}
@@ -88,6 +95,8 @@ func (p *pool) addAction(actionID string) chan *AMIMsg {
 }
 
 func (p *pool) delAction(actionID string) {
+	p.mux.Lock()
+	defer p.mux.Unlock()
 	delete(p.actionConsumer, actionID)
 }
 
@@ -95,7 +104,6 @@ func (p *pool) delAction(actionID string) {
 type Client struct {
 	p      *pool
 	cancel context.CancelFunc
-	m      sync.Mutex
 	action *Action
 	conn   net.Conn
 }
@@ -103,8 +111,8 @@ type Client struct {
 // NewClient creates new AMI client and returns client or error
 func NewClient(conn net.Conn) (*Client, error) {
 	p := &pool{
-		make(map[string]*actionDispatchConsumer),
-		make(map[string]chan *AMIMsg),
+		actionConsumer: make(map[string]*actionDispatchConsumer),
+		eventConsumer:  make(map[string]chan *AMIMsg),
 	}
 	ctx, cancel := context.WithCancel(context.Background())
 	c := &Client{p: p, cancel: cancel, action: NewAction(), conn: conn}
@@ -198,8 +206,6 @@ func (c *Client) Login(user, pass string) error {
 
 func (c *Client) dispatch(msg *AMIMsg) {
 	go func() {
-		c.m.Lock()
-		defer c.m.Unlock()
 		if c.p.responseDispatch(msg) {
 			return
 		}
