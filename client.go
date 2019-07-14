@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-var anyEventKey string = "any-event"
+var anyEventKey = "any-event-c27ffb3c3a56490"
 
 type actionDispatchConsumer struct {
 	ch     chan *AMIMsg
@@ -33,14 +33,14 @@ func (p *pool) responseDispatch(msg *AMIMsg) bool {
 	if !ok {
 		return false
 	}
-	if respChan, ok := p.actionConsumer[actionID]; ok {
+	if respChan, ok := p.matchAction(actionID); ok {
 		respChan.ch <- msg
 		if msg.IsEventListStart() {
 			respChan.isList = true
 		}
 		if !respChan.isList || (respChan.isList && msg.IsEventListEnd()) {
 			close(respChan.ch)
-			delete(p.actionConsumer, actionID)
+			p.delAction(actionID)
 			return true
 		}
 	}
@@ -56,23 +56,42 @@ func (p *pool) eventDispatch(msg *AMIMsg) {
 		return
 	}
 	event = strings.ToLower(strings.TrimSpace(event))
-	if ch, ok := p.eventConsumer[event]; ok {
+	if ch, ok := p.matchEvent(event); ok {
 		ch <- msg
 	}
-	if ch, ok := p.eventConsumer[anyEventKey]; ok {
+	if ch, ok := p.matchEvent(anyEventKey); ok {
 		ch <- msg
 	}
 }
 
-func (p *pool) addAction(actionId string) chan *AMIMsg {
-	if _, ok := p.actionConsumer[actionId]; ok {
+func (p *pool) matchEvent(event string) (chan<- *AMIMsg, bool) {
+	ch, ok := p.eventConsumer[event]
+	return ch, ok
+}
+
+func (p *pool) setEventConsumer(event string, chMsg chan *AMIMsg) {
+	p.eventConsumer[event] = chMsg
+}
+
+func (p *pool) matchAction(action string) (*actionDispatchConsumer, bool) {
+	ch, ok := p.actionConsumer[action]
+	return ch, ok
+}
+
+func (p *pool) addAction(actionID string) chan *AMIMsg {
+	if _, ok := p.matchAction(actionID); ok {
 		return nil
 	}
 	chMsg := make(chan *AMIMsg)
-	p.actionConsumer[actionId] = newActionDispatchConsumer(chMsg)
+	p.actionConsumer[actionID] = newActionDispatchConsumer(chMsg)
 	return chMsg
 }
 
+func (p *pool) delAction(actionID string) {
+	delete(p.actionConsumer, actionID)
+}
+
+// Client structure
 type Client struct {
 	p      *pool
 	cancel context.CancelFunc
@@ -109,29 +128,34 @@ func NewClient(conn net.Conn) (*Client, error) {
 	return c, nil
 }
 
+// Close client and stop all routines
 func (c *Client) Close() {
 	c.cancel()
 }
 
+// AnyEvent provides channel for any AMI events received
 func (c *Client) AnyEvent() (chan *AMIMsg, error) {
-	if _, ok := c.p.eventConsumer[anyEventKey]; ok {
+	if _, ok := c.p.matchEvent(anyEventKey); ok {
 		return nil, errors.New("any event consumer channel already exists")
 	}
 	chMsg := make(chan *AMIMsg)
-	c.p.eventConsumer[anyEventKey] = chMsg
+	c.p.setEventConsumer(anyEventKey, chMsg)
 	return chMsg, nil
 }
 
+// OnEvent provides channel for specific event.
+// Returns error if listener for event already created.
 func (c *Client) OnEvent(event string) (chan *AMIMsg, error) {
 	event = strings.ToLower(strings.TrimSpace(event))
-	if _, ok := c.p.eventConsumer[event]; ok {
+	if _, ok := c.p.matchEvent(event); ok {
 		return nil, errors.New("event '" + event + "' consumer channel already exists")
 	}
 	chMsg := make(chan *AMIMsg)
-	c.p.eventConsumer[event] = chMsg
+	c.p.setEventConsumer(event, chMsg)
 	return chMsg, nil
 }
 
+// Action send to Asterisk MI.
 func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, error) {
 	c.action.New(action)
 	actionID := c.action.ActionId()
@@ -150,6 +174,7 @@ func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, 
 	return ch, nil
 }
 
+// Login action. Blocking and waits response.
 func (c *Client) Login(user, pass string) error {
 	login := c.action.Login(user, pass)
 	ch := c.p.addAction(c.action.ActionId())

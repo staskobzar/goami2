@@ -3,7 +3,7 @@
 .PHONY: test cov bench
 
 test:
-	go test -cover
+	go test -race -cover
 
 cov:
 	@go test -coverprofile=coverage.out
