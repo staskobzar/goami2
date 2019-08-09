@@ -1,6 +1,7 @@
 package goami2
 
 import (
+	"context"
 	"net"
 	"time"
 )
@@ -14,18 +15,41 @@ const (
 
 // Client structure
 type Client struct {
+	conn   net.Conn
+	cancel context.CancelFunc
 }
 
 // NewClient creates new AMI client and returns client or error
 func NewClient(conn net.Conn) (*Client, error) {
-	c := &Client{}
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &Client{
+		conn:   conn,
+		cancel: cancel,
+	}
 
-	return c, nil
+	ch, err := connPipeline(ctx, conn)
+	if err != nil {
+		return nil, err
+	}
+
+	go func() {
+		defer conn.Close()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg := <-ch:
+				_ = msg
+				// dispatch message
+			}
+		}
+	}()
+	return client, nil
 }
 
 // Close client and stop all routines
 func (c *Client) Close() {
-	// c.cancel()
+	c.cancel()
 }
 
 // AnyEvent provides channel for any AMI events received
