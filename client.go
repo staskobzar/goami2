@@ -20,7 +20,6 @@ const (
 type Client struct {
 	conn   net.Conn
 	cancel context.CancelFunc
-	action *Action
 	pool   *pool
 }
 
@@ -30,7 +29,6 @@ func NewClient(conn net.Conn) (*Client, error) {
 	client := &Client{
 		conn:   conn,
 		cancel: cancel,
-		action: NewAction(),
 		pool:   newPool(),
 	}
 
@@ -82,9 +80,10 @@ func (c *Client) OnEvent(event string) (chan *AMIMsg, error) {
 
 // Action send to Asterisk MI.
 // ActionID will be generated.
-func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, error) {
-	c.action.New(action)
-	actionID := c.action.ActionID()
+func (c *Client) Action(actionName string, fields map[string]string) (chan *AMIMsg, error) {
+	action := NewAction()
+	action.New(actionName)
+	actionID := action.ActionID()
 
 	if actionID == "" {
 		return nil, errors.New("failed to set response channel for empty ActionID")
@@ -94,17 +93,17 @@ func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, 
 		return nil, err
 	}
 	for header, val := range fields {
-		c.action.Field(header, val)
+		action.Field(header, val)
 	}
-	msg := c.action.Message()
-	c.send([]byte(msg))
+	c.send(action.Message())
 	return ch, nil
 }
 
 // Login action. Blocking and waits response.
 func (c *Client) Login(user, pass string) error {
-	login := c.action.Login(user, pass)
-	ch, err := c.pool.add(c.action.ActionID())
+	action := NewAction()
+	login := action.Login(user, pass)
+	ch, err := c.pool.add(action.ActionID())
 	if err != nil {
 		return err
 	}
