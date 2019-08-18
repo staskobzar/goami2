@@ -31,7 +31,9 @@ func main() {
 	for {
 		select {
 		case msg := <-ch:
-			log.Printf("Got event: %s\n", msg.Event())
+			if event, ok := msg.Event(); ok {
+				log.Printf("Got event: %s\n", event)
+			}
 		}
 	}
 }
