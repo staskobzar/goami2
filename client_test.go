@@ -3,10 +3,11 @@ package goami2
 import (
 	"bufio"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func amiResponseServer(conn net.Conn, response []string) {
@@ -44,7 +45,6 @@ func TestClientLoginSuccess(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-/*
 func TestClientLoginFailed(t *testing.T) {
 	response := []string{
 		"Response: Error\r\n",
@@ -157,7 +157,6 @@ func TestClientAnyEventConsumer(t *testing.T) {
 
 	ch, err := client.AnyEvent()
 	assert.Nil(t, err)
-	assert.Equal(t, len(client.p.eventConsumer), 1)
 
 	go func() {
 		for _, s := range events {
@@ -209,7 +208,6 @@ func TestClientCustomEventConsumer(t *testing.T) {
 
 	ch, err := client.OnEvent("MusicOnHold")
 	assert.Nil(t, err)
-	assert.Equal(t, len(client.p.eventConsumer), 1)
 
 	go func() {
 		for _, s := range events {
@@ -230,11 +228,8 @@ func TestClientAddExistingEventChan(t *testing.T) {
 	assert.Nil(t, err)
 	_, err = client.OnEvent("MusicOnHold")
 	assert.Nil(t, err)
-	assert.Equal(t, len(client.p.eventConsumer), 1)
 
 	_, err = client.OnEvent("MusicOnHold")
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "already exists")
-	assert.Equal(t, len(client.p.eventConsumer), 1)
+	assert.Contains(t, err.Error(), "already in pool")
 }
-*/

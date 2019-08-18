@@ -2,9 +2,10 @@ package goami2
 
 import (
 	"context"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestConnectPipeline(t *testing.T) {
