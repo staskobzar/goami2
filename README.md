@@ -34,6 +34,9 @@ func main() {
 			if event, ok := msg.Event(); ok {
 				log.Printf("Got event: %s\n", event)
 			}
+      case err := <- client.Error():
+        client.Close()
+        log.Fatalf("Connection error: %s", err)
 		}
 	}
 }
@@ -69,6 +72,9 @@ func (c *Client) Login(user, pass string) error
 func (c *Client) OnEvent(event string) (chan *AMIMsg, error)
     OnEvent provides channel for specific event. Returns error if listener for
     event already created.
+
+func (c *Client) Error() <-chan error
+    Error returns channel with connection errors
 
 ```
 
