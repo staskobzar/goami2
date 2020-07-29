@@ -34,9 +34,9 @@ func main() {
 			if event, ok := msg.Event(); ok {
 				log.Printf("Got event: %s\n", event)
 			}
-      case err := <- client.Error():
-        client.Close()
-        log.Fatalf("Connection error: %s", err)
+		case err := <- client.Error():
+			client.Close()
+			log.Fatalf("Connection error: %s", err)
 		}
 	}
 }
