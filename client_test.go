@@ -123,6 +123,48 @@ func TestClientEventList(t *testing.T) {
 	assert.Equal(t, EN, 3)
 }
 
+func TestActionErrorChannel(t *testing.T) {
+	response := []string{
+		"Response: Success\r\n",
+		"ActionID: $ACTIONID$\r\n",
+		"Message: Success",
+	}
+
+	wConn, rConn := net.Pipe()
+	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
+	client, err := NewClient(rConn)
+	assert.Nil(t, err)
+
+	amiResponseServer(wConn, response)
+	rConn.Close()
+
+	chErr := make(chan error)
+	go func() {
+		err := <-client.Error()
+		chErr <- err
+	}()
+
+	_, err = client.Action("QueueSummary", nil)
+	assert.NotNil(t, err)
+
+	errFromChan := <-chErr
+	assert.Equal(t, err, errFromChan)
+}
+
+func TestClientCloseWithErrorChannel(t *testing.T) {
+	wConn, rConn := net.Pipe()
+	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
+	client, err := NewClient(rConn)
+	assert.Nil(t, err)
+
+	_, err = client.AnyEvent()
+	assert.Nil(t, err)
+	// close error channel
+	client.Close()
+	err, open := <-client.Error()
+	assert.False(t, open)
+}
+
 func TestClientAnyEventConsumer(t *testing.T) {
 	events := []string{
 		"Event: Hold\r\n" +

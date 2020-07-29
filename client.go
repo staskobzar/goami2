@@ -19,6 +19,7 @@ const (
 // Client structure
 type Client struct {
 	conn   net.Conn
+	err    chan error
 	cancel context.CancelFunc
 	pool   *pool
 }
@@ -28,11 +29,12 @@ func NewClient(conn net.Conn) (*Client, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	client := &Client{
 		conn:   conn,
+		err:    make(chan error, 1),
 		cancel: cancel,
 		pool:   newPool(),
 	}
 
-	ch, err := connPipeline(ctx, conn)
+	ch, err := connPipeline(ctx, conn, client.err)
 	if err != nil {
 		return nil, err
 	}
@@ -54,6 +56,13 @@ func NewClient(conn net.Conn) (*Client, error) {
 // Close client and stop all routines
 func (c *Client) Close() {
 	c.cancel()
+	close(c.err)
+	c.conn.Close()
+}
+
+// Error returns channel with connection errors
+func (c *Client) Error() <-chan error {
+	return c.err
 }
 
 // AnyEvent provides channel for any AMI events received
@@ -95,7 +104,11 @@ func (c *Client) Action(actionName string, fields map[string]string) (chan *AMIM
 	for header, val := range fields {
 		action.Field(header, val)
 	}
-	c.send(action.Message())
+	err = c.send(action.Message())
+	if err != nil {
+		c.err <- err
+		return nil, err
+	}
 	return ch, nil
 }
 
@@ -132,7 +145,7 @@ func (c *Client) send(action []byte) error {
 	return nil
 }
 
-func connPipeline(ctx context.Context, conn net.Conn) (<-chan *AMIMsg, error) {
+func connPipeline(ctx context.Context, conn net.Conn, cherr chan<- error) (<-chan *AMIMsg, error) {
 	var err error
 
 	err = readPrompt(ctx, conn)
@@ -140,7 +153,7 @@ func connPipeline(ctx context.Context, conn net.Conn) (<-chan *AMIMsg, error) {
 		return nil, err
 	}
 
-	chanOut, err := newReader(ctx, conn)
+	chanOut, err := newReader(ctx, conn, cherr)
 	if err != nil {
 		return nil, err
 	}
@@ -163,6 +176,9 @@ func newPool() *pool {
 }
 
 func (p *pool) dispatch(msg *AMIMsg) {
+	if msg == nil {
+		return
+	}
 	// dispatch message to Action listener
 	go func(m *AMIMsg) {
 		if actionID, exists := m.ActionID(); exists {

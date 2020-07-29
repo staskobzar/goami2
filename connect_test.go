@@ -20,7 +20,7 @@ func TestConnectPipeline(t *testing.T) {
 	wConn, rConn := net.Pipe()
 	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
 
-	ch, err := connPipeline(ctx, rConn)
+	ch, err := connPipeline(ctx, rConn, nil)
 	assert.Nil(t, err)
 
 	go func() {
@@ -80,7 +80,7 @@ func BenchmarkConnectPipelineEvent(b *testing.B) {
 	wConn, rConn := net.Pipe()
 	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
 
-	ch, _ := connPipeline(ctx, rConn)
+	ch, _ := connPipeline(ctx, rConn, nil)
 
 	go func() {
 		for i := 0; i < b.N; i++ {

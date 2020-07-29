@@ -3,11 +3,12 @@ package goami2
 import (
 	"bufio"
 	"context"
-	"github.com/stretchr/testify/assert"
 	"net"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestScannerSplitFunc(t *testing.T) {
@@ -41,7 +42,7 @@ func TestReaderReadEvent(t *testing.T) {
 		wConn.Write(inStream)
 	}()
 
-	eventChan, err := newReader(ctx, rConn)
+	eventChan, err := newReader(ctx, rConn, nil)
 	if err != nil {
 		t.Errorf("Failed init Reader: %s", err)
 		return
@@ -58,15 +59,21 @@ func TestReaderReadEvent(t *testing.T) {
 
 func TestReaderEarlyCancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	cherr := make(chan error, 1)
+	_, conn := net.Pipe()
 	cancel()
-	_, err := newReader(ctx, nil)
+	_, err := newReader(ctx, conn, cherr)
 	assert.NotNil(t, err)
 }
 
 func TestReaderContextClose(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
-	ch, _ := newReader(ctx, nil)
+	cherr := make(chan error, 1)
+	_, conn := net.Pipe()
+	ch, err := newReader(ctx, conn, cherr)
+	assert.Nil(t, err)
 	cancel()
+	conn.Close()
 	_, ok := <-ch
 	assert.False(t, ok)
 }

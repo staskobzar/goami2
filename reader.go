@@ -5,10 +5,14 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"log"
+	"io"
 	"net"
 	"regexp"
 	"time"
+)
+
+const (
+	NetChunkSize = 256
 )
 
 func scanAMIMsg(data []byte, atEOF bool) (advance int, token []byte, err error) {
@@ -57,28 +61,83 @@ func readPrompt(ctx context.Context, conn net.Conn) (err error) {
 	return
 }
 
-func newReader(ctx context.Context, conn net.Conn) (<-chan *AMIMsg, error) {
+// read AMI from server, convert to AMIMsg and send downstream
+func newReader(ctx context.Context,
+	conn net.Conn,
+	cherr chan<- error) (<-chan *AMIMsg, error) {
 	if ctx.Err() != nil {
 		return nil, ctx.Err()
 	}
-	ch := make(chan *AMIMsg)
+
+	rpipe, chClose := netReader(ctx, cherr, conn)
+	ch := netScanner(ctx, rpipe, cherr, chClose)
+	return ch, nil
+}
+
+// read from network and send text to  scanner
+// also controls network errors
+func netReader(ctx context.Context,
+	cherr chan<- error,
+	conn net.Conn) (*io.PipeReader, chan bool) {
+	// internal routing of messages for better network errors handle
+	rpipe, wpipe := io.Pipe()
+	chClose := make(chan bool)
 	go func() {
-		scanner := bufio.NewScanner(conn)
-		scanner.Split(scanAMIMsg)
-		defer close(ch)
+		defer wpipe.Close()
+		defer close(chClose)
 		for {
 			select {
 			case <-ctx.Done():
 				return
 			default:
-				scanner.Scan()
-				if err := scanner.Err(); err != nil {
-					log.Fatalf("Failed to read from connection: %v", err)
+				buf := make([]byte, NetChunkSize)
+				ln, err := conn.Read(buf)
+				if ctx.Err() != nil {
+					return // already closed
 				}
-				pack := scanner.Text()
-				ch <- NewAMIMsg(pack)
+				if err != nil {
+					cherr <- err
+					return
+				}
+				if ln > 0 {
+					wpipe.Write(buf[:ln])
+				}
 			}
 		}
 	}()
-	return ch, nil
+	return rpipe, chClose
+}
+
+// scan AMI packets and convert to AMIMsg structure
+func netScanner(ctx context.Context,
+	rpipe *io.PipeReader,
+	cherr chan<- error,
+	chClose chan bool) chan *AMIMsg {
+	ch := make(chan *AMIMsg)
+	go func() {
+		scanner := bufio.NewScanner(rpipe)
+		scanner.Split(scanAMIMsg)
+		defer close(ch)
+		defer rpipe.Close()
+		for {
+			select {
+			case <-chClose:
+				return
+			default:
+				scanner.Scan()
+				if ctx.Err() != nil {
+					return // already closed
+				}
+				if err := scanner.Err(); err != nil {
+					cherr <- err
+					continue
+				}
+				pack := scanner.Text()
+				if len(pack) > 0 {
+					ch <- NewAMIMsg(pack)
+				}
+			}
+		}
+	}()
+	return ch
 }
