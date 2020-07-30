@@ -3,7 +3,9 @@ package goami2
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 const crlf = "\r\n"
@@ -17,6 +19,29 @@ type Action struct {
 // NewAction creats action
 func NewAction() *Action {
 	return &Action{}
+}
+
+// ActionFromJSON convert JSON string to action structure
+func ActionFromJSON(source string) (*Action, error) {
+	var jb interface{}
+	action := NewAction()
+	err := json.Unmarshal([]byte(source), &jb)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range jb.(map[string]interface{}) {
+		action.Field(strings.Title(k), v.(string))
+		if strings.EqualFold(k, "actionid") {
+			action.aid = v.(string)
+		}
+	}
+
+	if len(strings.TrimSpace(action.aid)) == 0 {
+		action.writeActionID()
+	}
+
+	return action, nil
 }
 
 // New resets buffer and set new Action
