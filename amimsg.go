@@ -1,6 +1,7 @@
 package goami2
 
 import (
+	"encoding/json"
 	"strings"
 )
 
@@ -117,4 +118,14 @@ func (m *AMIMsg) Event() (string, bool) {
 // Message returns value of AMI Message
 func (m *AMIMsg) Message() string {
 	return m.Field("message")
+}
+
+// JSON returns AMI message as JSON string
+// if error returns empty sting
+func (m *AMIMsg) JSON() string {
+	b, err := json.Marshal(m.f)
+	if err != nil {
+		return ""
+	}
+	return string(b)
 }

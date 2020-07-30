@@ -1,8 +1,9 @@
 package goami2
 
 import (
-	"github.com/stretchr/testify/assert"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestAMIMsgEvent(t *testing.T) {
@@ -39,4 +40,25 @@ func TestAMIMsgEventNotFound(t *testing.T) {
 	resp := NewAMIMsg(inStr)
 	_, ok := resp.Event()
 	assert.False(t, ok)
+}
+
+func TestAMIMsgToJson(t *testing.T) {
+	inStr := "Event: Newchannel\r\n" +
+		"Channel: PJSIP/misspiggy-00000001\r\n" +
+		"Exten: 31337\r\n" +
+		"ActionId: SDY4-12837-123878782\r\n" +
+		"Context: inbound\r\n"
+
+	msg := NewAMIMsg(inStr)
+
+	json := msg.JSON()
+	matchStr := `{"event":"Newchannel","channel":"PJSIP/misspiggy-00000001",` +
+		`"exten":"31337","actionid":"SDY4-12837-123878782",` +
+		`"context":"inbound"}`
+	assert.JSONEq(t, matchStr, json)
+
+	// empty message return empty string
+	msg = NewAMIMsg("")
+	json = msg.JSON()
+	assert.Equal(t, "", "")
 }
