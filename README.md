@@ -117,6 +117,9 @@ func (m *AMIMsg) IsSuccess() bool
 
 func (m *AMIMsg) Message() string
     Message returns value of AMI Message
+
+func (m *AMIMsg) JSON() string
+    JSON returns AMI message as JSON string. If error returns empty sting
 ```
 
 ## Action
@@ -129,6 +132,9 @@ type Action struct {
 
 func NewAction() *Action
     NewAction creats action
+
+func ActionFromJSON(source string) (*Action, error)
+    ActionFromJSON convert JSON string to action structure
 
 func (a *Action) ActionID() string
     ActionID returns AMI ActionID value
