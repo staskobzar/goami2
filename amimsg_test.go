@@ -22,6 +22,20 @@ func TestAMIMsgEvent(t *testing.T) {
 	assert.Equal(t, actionid, "SDY4-12837-123878782")
 }
 
+func TestAMIMsgAddField(t *testing.T) {
+	inStr := "Event: Newchannel\r\n" +
+		"Channel: PJSIP/misspiggy-00000001\r\n" +
+		"Exten: 31337\r\n" +
+		"ActionId: SDY4-12837-123878782\r\n" +
+		"Context: inbound\r\n"
+
+	msg := NewAMIMsg(inStr)
+	msg.AddField("AMISrvID", "5")
+	msg.AddField("AMIHost", "10.0.5.5:5038")
+	assert.Equal(t, "5", msg.Field("AMISrvID"))
+	assert.Equal(t, "10.0.5.5:5038", msg.Field("AMIHost"))
+}
+
 func TestAMIMsgResponse(t *testing.T) {
 	inStr := "Response: Success\r\n" +
 		"EventList: start\r\n" +

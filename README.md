@@ -94,6 +94,10 @@ func (m *AMIMsg) ActionID() (string, bool)
 func (m *AMIMsg) Event() (string, bool)
     Event gets Event field value from AMI Message
 
+func (m *AMIMsg) AddField(key string, value string)
+     AddField push new field to AMI package.
+     If field already set then override the value
+
 func (m *AMIMsg) Field(key string) string
     Field gets AMI Message field value
 

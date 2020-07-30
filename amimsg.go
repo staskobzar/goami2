@@ -58,6 +58,14 @@ func (m *AMIMsg) Field(key string) string {
 	return ""
 }
 
+// AddField push new field to AMI package.
+// If field already set then override the value
+func (m *AMIMsg) AddField(key string, value string) {
+	k := strings.TrimSpace(key)
+	k = strings.ToLower(k)
+	m.f[k] = value
+}
+
 // ActionID gets AMI Message ActionID value or false if not exists
 func (m *AMIMsg) ActionID() (string, bool) {
 	id := strings.TrimSpace(m.Field("ActionId"))
