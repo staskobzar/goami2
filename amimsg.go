@@ -3,6 +3,7 @@ package goami2
 import (
 	"encoding/json"
 	"strings"
+	"sync"
 )
 
 type msgType int
@@ -20,11 +21,12 @@ const (
 type AMIMsg struct {
 	f map[string]string
 	t msgType
+	m sync.Mutex
 }
 
 // NewAMIMsg create new AMIMsg
 func NewAMIMsg(text string) *AMIMsg {
-	msg := &AMIMsg{make(map[string]string), Unknown}
+	msg := &AMIMsg{f: make(map[string]string), t: Unknown}
 	for _, str := range strings.Split(text, "\r\n") {
 		msg.addField(str)
 	}
@@ -32,6 +34,8 @@ func NewAMIMsg(text string) *AMIMsg {
 }
 
 func (m *AMIMsg) addField(str string) {
+	m.m.Lock()
+	defer m.m.Unlock()
 	split := strings.SplitN(str, ":", 2)
 	if len(split) < 2 {
 		return
@@ -61,6 +65,8 @@ func (m *AMIMsg) Field(key string) string {
 // AddField push new field to AMI package.
 // If field already set then override the value
 func (m *AMIMsg) AddField(key string, value string) {
+	m.m.Lock()
+	defer m.m.Unlock()
 	k := strings.TrimSpace(key)
 	k = strings.ToLower(k)
 	m.f[k] = value
