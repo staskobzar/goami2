@@ -55,6 +55,8 @@ func (m *AMIMsg) addField(str string) {
 
 // Field gets AMI Message field value
 func (m *AMIMsg) Field(key string) string {
+	m.m.Lock()
+	defer m.m.Unlock()
 	key = strings.ToLower(key)
 	if val, ok := m.f[key]; ok {
 		return val
