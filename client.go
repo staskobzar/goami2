@@ -56,7 +56,9 @@ func NewClient(conn net.Conn) (*Client, error) {
 // Close client and stop all routines
 func (c *Client) Close() {
 	c.cancel()
-	close(c.err)
+	if _, ok := <-c.err; ok {
+		close(c.err)
+	}
 	c.conn.Close()
 }
 

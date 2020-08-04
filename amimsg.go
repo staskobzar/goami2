@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 type msgType int
+type fields map[string]string
 
 const (
 	// Unknown AMI Message type
@@ -19,14 +21,15 @@ const (
 
 // AMIMsg structure of AMI message
 type AMIMsg struct {
-	f map[string]string
-	t msgType
-	m sync.Mutex
+	mu sync.Mutex
+	f  atomic.Value
+	t  msgType
 }
 
 // NewAMIMsg create new AMIMsg
 func NewAMIMsg(text string) *AMIMsg {
-	msg := &AMIMsg{f: make(map[string]string), t: Unknown}
+	msg := &AMIMsg{t: Unknown}
+	msg.f.Store(make(fields))
 	for _, str := range strings.Split(text, "\r\n") {
 		msg.addField(str)
 	}
@@ -34,15 +37,15 @@ func NewAMIMsg(text string) *AMIMsg {
 }
 
 func (m *AMIMsg) addField(str string) {
-	m.m.Lock()
-	defer m.m.Unlock()
 	split := strings.SplitN(str, ":", 2)
 	if len(split) < 2 {
 		return
 	}
 	key := strings.ToLower(split[0])
 	val := strings.TrimSpace(split[1])
-	m.f[key] = val
+	f := m.f.Load().(fields)
+	f[key] = val
+	m.f.Store(f)
 
 	switch key {
 	case "event":
@@ -55,10 +58,11 @@ func (m *AMIMsg) addField(str string) {
 
 // Field gets AMI Message field value
 func (m *AMIMsg) Field(key string) string {
-	m.m.Lock()
-	defer m.m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	key = strings.ToLower(key)
-	if val, ok := m.f[key]; ok {
+	f := m.f.Load().(fields)
+	if val, ok := f[key]; ok {
 		return val
 	}
 	return ""
@@ -67,11 +71,13 @@ func (m *AMIMsg) Field(key string) string {
 // AddField push new field to AMI package.
 // If field already set then override the value
 func (m *AMIMsg) AddField(key string, value string) {
-	m.m.Lock()
-	defer m.m.Unlock()
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	k := strings.TrimSpace(key)
 	k = strings.ToLower(k)
-	m.f[k] = value
+	f := m.f.Load().(fields)
+	f[k] = value
+	m.f.Store(f)
 }
 
 // ActionID gets AMI Message ActionID value or false if not exists
@@ -139,7 +145,8 @@ func (m *AMIMsg) Message() string {
 // JSON returns AMI message as JSON string
 // if error returns empty sting
 func (m *AMIMsg) JSON() string {
-	b, err := json.Marshal(m.f)
+	f := m.f.Load().(fields)
+	b, err := json.Marshal(f)
 	if err != nil {
 		return ""
 	}
