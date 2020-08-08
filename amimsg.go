@@ -80,6 +80,22 @@ func (m *AMIMsg) AddField(key string, value string) {
 	m.f.Store(f)
 }
 
+// DelField deletes field from the AMIMsg
+// Returns true when field is found and deleted.
+func (m *AMIMsg) DelField(key string) (ret bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	k := strings.TrimSpace(key)
+	k = strings.ToLower(k)
+	f := m.f.Load().(fields)
+	if _, ok := f[k]; ok {
+		delete(f, k)
+		ret = true
+	}
+	m.f.Store(f)
+	return
+}
+
 // ActionID gets AMI Message ActionID value or false if not exists
 func (m *AMIMsg) ActionID() (string, bool) {
 	id := strings.TrimSpace(m.Field("ActionId"))

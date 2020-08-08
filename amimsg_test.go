@@ -36,6 +36,20 @@ func TestAMIMsgAddField(t *testing.T) {
 	assert.Equal(t, "10.0.5.5:5038", msg.Field("AMIHost"))
 }
 
+func TestAMIMsgDelField(t *testing.T) {
+	inStr := "Event: Newchannel\r\n" +
+		"Channel: PJSIP/misspiggy-00000001\r\n" +
+		"Exten: 31337\r\n" +
+		"ActionId: SDY4-12837-123878782\r\n" +
+		"Context: inbound\r\n"
+
+	msg := NewAMIMsg(inStr)
+	assert.Equal(t, "inbound", msg.Field("Context"))
+	assert.True(t, msg.DelField("context"))
+	assert.False(t, msg.DelField("context"))
+	assert.Equal(t, "", msg.Field("Context"))
+}
+
 func TestAMIMsgResponse(t *testing.T) {
 	inStr := "Response: Success\r\n" +
 		"EventList: start\r\n" +
