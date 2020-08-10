@@ -45,15 +45,15 @@ func main() {
 ```
 
 # API goami2
---
+---
     import "github.com/staskobzar/goami2"
 
 
 ## Usage
 
-### type AMIMsg
-
-AMIMsg structure of AMI message
+>### type AMIMsg
+>
+>AMIMsg structure of AMI message
 
 #### func  NewAMIMsg
 
@@ -177,8 +177,9 @@ func (m *AMIMsg) Variable(key string) (string, bool)
 Variable search variable value in Variable fields
 
 
-### type Action
-Action structure
+>### type Action
+>
+>Action structure
 
 #### func  ActionFromJSON
 
@@ -229,9 +230,9 @@ func (a *Action) New(action string)
 ```
 New resets buffer and set new Action
 
-### type Client
-
-Client structure
+>### type Client
+>
+>Client structure
 
 #### func  NewClient
 
