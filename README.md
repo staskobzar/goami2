@@ -54,7 +54,7 @@ func main() {
 >### type AMIMsg
 >
 >AMIMsg structure of AMI message
-
+---
 #### func  NewAMIMsg
 
 ```go
@@ -180,7 +180,7 @@ Variable search variable value in Variable fields
 >### type Action
 >
 >Action structure
-
+---
 #### func  ActionFromJSON
 
 ```go
@@ -233,7 +233,7 @@ New resets buffer and set new Action
 >### type Client
 >
 >Client structure
-
+---
 #### func  NewClient
 
 ```go
