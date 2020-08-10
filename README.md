@@ -44,116 +44,241 @@ func main() {
 }
 ```
 
-# API
-TODO: Improve docs
-```
-package goami2 // import "github.com/staskobzar/goami2"
-```
-## Client
-```
-type Client struct {
-	// Has unexported fields.
-}
-    Client structure
+# API goami2
+--
+    import "github.com/staskobzar/goami2"
 
-func NewClient(conn net.Conn) (*Client, error)
-    NewClient creates new AMI client and returns client or error
 
-func (c *Client) Action(action string, fields map[string]string) (chan *AMIMsg, error)
-    Action send to Asterisk MI.
+## Usage
 
-func (c *Client) AnyEvent() (chan *AMIMsg, error)
-    AnyEvent provides channel for any AMI events received
+### type AMIMsg
 
-func (c *Client) Close()
-    Close client and stop all routines
+AMIMsg structure of AMI message
 
-func (c *Client) Login(user, pass string) error
-    Login action. Blocking and waits response.
+#### func  NewAMIMsg
 
-func (c *Client) OnEvent(event string) (chan *AMIMsg, error)
-    OnEvent provides channel for specific event. Returns error if listener for
-    event already created.
-
-func (c *Client) Error() <-chan error
-    Error returns channel with connection errors
-
-```
-
-## AMIMsg
-```
-type AMIMsg struct {
-	// Has unexported fields.
-}
-    AMIMsg structure of AMI message
-
+```go
 func NewAMIMsg(text string) *AMIMsg
-    NewAMIMsg create new AMIMsg
+```
+NewAMIMsg create new AMIMsg
 
+#### func (*AMIMsg) ActionID
+
+```go
 func (m *AMIMsg) ActionID() (string, bool)
-    ActionID gets AMI Message ActionID value or false if not exists
+```
+ActionID gets AMI Message ActionID value or false if not exists
 
-func (m *AMIMsg) Event() (string, bool)
-    Event gets Event field value from AMI Message
+#### func (*AMIMsg) AddField
 
+```go
 func (m *AMIMsg) AddField(key string, value string)
-     AddField push new field to AMI package.
-     If field already set then override the value
+```
+AddField push new field to AMI package. If field already set then override the
+value
 
+#### func (*AMIMsg) ChanVariable
+
+```go
+func (m *AMIMsg) ChanVariable(key string) (string, bool)
+```
+ChanVariable search variable value in ChanVariable fields
+
+#### func (*AMIMsg) DelField
+
+```go
+func (m *AMIMsg) DelField(key string) (ret bool)
+```
+DelField deletes field from the AMIMsg Returns true when field is found and
+deleted.
+
+#### func (*AMIMsg) Event
+
+```go
+func (m *AMIMsg) Event() (string, bool)
+```
+Event gets Event field value from AMI Message
+
+#### func (*AMIMsg) Field
+
+```go
 func (m *AMIMsg) Field(key string) string
-    Field gets AMI Message field value
+```
+Field gets AMI Message field value
 
+#### func (*AMIMsg) IsEvent
+
+```go
 func (m *AMIMsg) IsEvent() bool
-    IsEvent returns True is AMI Message is Event
+```
+IsEvent returns True is AMI Message is Event
 
+#### func (*AMIMsg) IsEventList
+
+```go
 func (m *AMIMsg) IsEventList() bool
-    IsEventList returns True if AMI Message is EventList
+```
+IsEventList returns True if AMI Message is EventList
 
+#### func (*AMIMsg) IsEventListEnd
+
+```go
 func (m *AMIMsg) IsEventListEnd() bool
-    IsEventListEnd returns True if AMI Message indicates that EventList ends
+```
+IsEventListEnd returns True if AMI Message indicates that EventList ends
 
+#### func (*AMIMsg) IsEventListStart
+
+```go
 func (m *AMIMsg) IsEventListStart() bool
-    IsEventListStart returns True if AMI Message indicates that EventList starts
+```
+IsEventListStart returns True if AMI Message indicates that EventList starts
 
+#### func (*AMIMsg) IsResponse
+
+```go
 func (m *AMIMsg) IsResponse() bool
-    IsResponse returns True is AMI Message is Response
+```
+IsResponse returns True is AMI Message is Response
 
+#### func (*AMIMsg) IsSuccess
+
+```go
 func (m *AMIMsg) IsSuccess() bool
-    IsSuccess returns True if AMI Message is Response and is "Success"
+```
+IsSuccess returns True if AMI Message is Response and is "Success"
 
-func (m *AMIMsg) Message() string
-    Message returns value of AMI Message
+#### func (*AMIMsg) JSON
 
+```go
 func (m *AMIMsg) JSON() string
-    JSON returns AMI message as JSON string. If error returns empty sting
 ```
+JSON returns AMI message as JSON string if error returns empty sting
 
-## Action
+#### func (*AMIMsg) Message
+
+```go
+func (m *AMIMsg) Message() string
 ```
-type Action struct {
-	bytes.Buffer
-	// Has unexported fields.
-}
-    Action structure
+Message returns value of AMI Message
 
-func NewAction() *Action
-    NewAction creats action
+#### func (*AMIMsg) Var
 
+```go
+func (m *AMIMsg) Var(key string) (string, bool)
+```
+Var search variable value in Variable and ChanVariable fields
+
+#### func (*AMIMsg) Variable
+
+```go
+func (m *AMIMsg) Variable(key string) (string, bool)
+```
+Variable search variable value in Variable fields
+
+
+### type Action
+Action structure
+
+#### func  ActionFromJSON
+
+```go
 func ActionFromJSON(source string) (*Action, error)
-    ActionFromJSON convert JSON string to action structure
-
-func (a *Action) ActionID() string
-    ActionID returns AMI ActionID value
-
-func (a *Action) Field(header, value string)
-    Field gets Action message
-
-func (a *Action) Login(user, password string) []byte
-    Login gets Login AMI Action as []bytes
-
-func (a *Action) Message() []byte
-    Message convert Action to []bytes
-
-func (a *Action) New(action string)
-    New resets buffer and set new Action
 ```
+ActionFromJSON convert JSON string to action structure
+
+#### func  NewAction
+
+```go
+func NewAction() *Action
+```
+NewAction creats action
+
+#### func (*Action) ActionID
+
+```go
+func (a *Action) ActionID() string
+```
+ActionID returns AMI ActionID value
+
+#### func (*Action) Field
+
+```go
+func (a *Action) Field(header, value string)
+```
+Field gets Action message
+
+#### func (*Action) Login
+
+```go
+func (a *Action) Login(user, password string) []byte
+```
+Login gets Login AMI Action as []bytes
+
+#### func (*Action) Message
+
+```go
+func (a *Action) Message() []byte
+```
+Message convert Action to []bytes
+
+#### func (*Action) New
+
+```go
+func (a *Action) New(action string)
+```
+New resets buffer and set new Action
+
+### type Client
+
+Client structure
+
+#### func  NewClient
+
+```go
+func NewClient(conn net.Conn) (*Client, error)
+```
+NewClient creates new AMI client and returns client or error
+
+#### func (*Client) Action
+
+```go
+func (c *Client) Action(actionName string, fields map[string]string) (chan *AMIMsg, error)
+```
+Action send to Asterisk MI. ActionID will be generated.
+
+#### func (*Client) AnyEvent
+
+```go
+func (c *Client) AnyEvent() (chan *AMIMsg, error)
+```
+AnyEvent provides channel for any AMI events received
+
+#### func (*Client) Close
+
+```go
+func (c *Client) Close()
+```
+Close client and stop all routines
+
+#### func (*Client) Error
+
+```go
+func (c *Client) Error() <-chan error
+```
+Error returns channel with connection errors
+
+#### func (*Client) Login
+
+```go
+func (c *Client) Login(user, pass string) error
+```
+Login action. Blocking and waits response.
+
+#### func (*Client) OnEvent
+
+```go
+func (c *Client) OnEvent(event string) (chan *AMIMsg, error)
+```
+OnEvent provides channel for specific event. Returns error if listener for event
+already created.

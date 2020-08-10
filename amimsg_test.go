@@ -50,6 +50,72 @@ func TestAMIMsgDelField(t *testing.T) {
 	assert.Equal(t, "", msg.Field("Context"))
 }
 
+func TestAMIMsgVariableField(t *testing.T) {
+	inStr := "Action: Originate\r\n" +
+		"ActionId: SDY4-12837-123878782\r\n" +
+		"Channel: PJSIP/kermit-00000002\r\n" +
+		"Context: outbound\r\n" +
+		"Exten: s\r\n" +
+		"Priority: 1\r\n" +
+		"CallerID: \"Kermit the Frog\" <123-4567>\r\n" +
+		"Account: FrogLegs\r\n" +
+		"Variable: MY_VAR=frogs jump\r\n" +
+		"Variable: HIDE_FROM_CHEF=true\r\n"
+	msg := NewAMIMsg(inStr)
+	v, ok := msg.Variable("foo")
+	assert.False(t, ok)
+	v, ok = msg.Variable("MY_VAR")
+	assert.True(t, ok)
+	assert.Equal(t, "frogs jump", v)
+	v, ok = msg.Variable("HIDE_FROM_CHEF")
+	assert.True(t, ok)
+	assert.Equal(t, "true", v)
+}
+
+func TestAMIMsgChanVariableField(t *testing.T) {
+	inStr := "Event: QueueJoin\r\n" +
+		"ActionId: SDY4-12837-123878782\r\n" +
+		"Channel: PJSIP/kermit-00000002\r\n" +
+		"Context: outbound\r\n" +
+		"Exten: s\r\n" +
+		"Priority: 1\r\n" +
+		"CallerID: \"Kermit the Frog\" <123-4567>\r\n" +
+		"Account: FrogLegs\r\n" +
+		"ChanVariable: realm=sip.pbx.com\r\n" +
+		"ChanVariable: account=123\r\n"
+	msg := NewAMIMsg(inStr)
+	v, ok := msg.ChanVariable("foo")
+	assert.False(t, ok)
+	v, ok = msg.ChanVariable("realm")
+	assert.True(t, ok)
+	assert.Equal(t, "sip.pbx.com", v)
+	v, ok = msg.ChanVariable("account")
+	assert.True(t, ok)
+	assert.Equal(t, "123", v)
+}
+
+func TestAMIMsgVarField(t *testing.T) {
+	inStr := "Event: QueueJoin\r\n" +
+		"ActionId: SDY4-12837-123878782\r\n" +
+		"Channel: PJSIP/kermit-00000002\r\n" +
+		"Context: outbound\r\n" +
+		"Exten: s\r\n" +
+		"Priority: 1\r\n" +
+		"CallerID: \"Kermit the Frog\" <123-4567>\r\n" +
+		"Account: FrogLegs\r\n" +
+		"Variable: MY_VAR=frogs jump\r\n" +
+		"ChanVariable: account=123\r\n"
+	msg := NewAMIMsg(inStr)
+	v, ok := msg.Var("foo")
+	assert.False(t, ok)
+	v, ok = msg.Var("account")
+	assert.True(t, ok)
+	assert.Equal(t, "123", v)
+	v, ok = msg.Var("MY_VAR")
+	assert.True(t, ok)
+	assert.Equal(t, "frogs jump", v)
+}
+
 func TestAMIMsgResponse(t *testing.T) {
 	inStr := "Response: Success\r\n" +
 		"EventList: start\r\n" +
@@ -89,4 +155,26 @@ func TestAMIMsgToJson(t *testing.T) {
 	msg = NewAMIMsg("")
 	json = msg.JSON()
 	assert.Equal(t, "", "")
+}
+
+func TestAMIMsgToJsonWithVariables(t *testing.T) {
+	inStr := "Event: Newchannel\r\n" +
+		"Channel: PJSIP/misspiggy-00000001\r\n" +
+		"Exten: 31337\r\n" +
+		"ActionId: SDY4-12837-123878782\r\n" +
+		"Context: inbound\r\n" +
+		"Variable: DIR=inbound\r\n" +
+		"Variable: extern=true\r\n" +
+		"ChanVariable: realm=sip.pbx.com\r\n" +
+		"ChanVariable: account=123\r\n"
+
+	msg := NewAMIMsg(inStr)
+
+	json := msg.JSON()
+
+	matchStr := `{"actionid":"SDY4-12837-123878782","channel":"PJSIP/misspiggy-00000001",` +
+		`"context":"inbound","event":"Newchannel","exten":"31337",` +
+		`"chanvariable":{"account":"123","realm":"sip.pbx.com"},` +
+		`"variable":{"DIR":"inbound","extern":"true"}}`
+	assert.JSONEq(t, matchStr, json)
 }
