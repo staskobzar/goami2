@@ -36,6 +36,17 @@ func strVal(str string, toLower bool) string {
 	return str
 }
 
+func strIsEmpty(str string) bool {
+	str = strVal(str, false)
+	return len(str) == 0
+}
+
+func strCmp(str, cmp string) bool {
+	str = strVal(str, true)
+	cmp = strVal(cmp, true)
+	return str == cmp
+}
+
 func splitKeyVal(str, sep string, keyToLow bool) (string, string) {
 	split := strings.SplitN(str, sep, 2)
 	if len(split) == 1 {
@@ -172,8 +183,7 @@ func (m *AMIMsg) AddField(key, val string) {
 func (m *AMIMsg) DelField(key string) (ret bool) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	k := strings.TrimSpace(key)
-	k = strings.ToLower(k)
+	k := strVal(key, true)
 	f := m.f.Load().(fields)
 	if _, ok := f[k]; ok {
 		delete(f, k)
@@ -185,8 +195,8 @@ func (m *AMIMsg) DelField(key string) (ret bool) {
 
 // ActionID gets AMI Message ActionID value or false if not exists
 func (m *AMIMsg) ActionID() (string, bool) {
-	id := strings.TrimSpace(m.Field("ActionId"))
-	if id == "" {
+	id := m.Field("ActionId")
+	if strIsEmpty(id) {
 		return "", false
 	}
 	return id, true
@@ -204,13 +214,14 @@ func (m *AMIMsg) IsEvent() bool {
 
 // IsSuccess returns True if AMI Message is Response and is "Success"
 func (m *AMIMsg) IsSuccess() bool {
-	return m.IsResponse() && strings.ToLower(m.Field("response")) == "success"
+	response := m.Field("response")
+	return m.IsResponse() && strCmp(response, "success")
 }
 
 // IsEventList returns True if AMI Message is EventList
 func (m *AMIMsg) IsEventList() bool {
 	event := m.Field("EventList")
-	return strings.TrimSpace(event) != ""
+	return !strIsEmpty(event)
 }
 
 // IsEventListStart returns True if AMI Message indicates that EventList starts
@@ -222,19 +233,19 @@ func (m *AMIMsg) IsEventListStart() bool {
 		return false
 	}
 	eventList := m.Field("EventList")
-	return strings.ToLower(eventList) == "start"
+	return strCmp(eventList, "start")
 }
 
 // IsEventListEnd returns True if AMI Message indicates that EventList ends
 func (m *AMIMsg) IsEventListEnd() bool {
 	eventList := m.Field("EventList")
-	return strings.ToLower(eventList) == "complete"
+	return strCmp(eventList, "complete")
 }
 
 // Event gets Event field value from AMI Message
 func (m *AMIMsg) Event() (string, bool) {
 	event := m.Field("event")
-	if strings.TrimSpace(event) == "" {
+	if strIsEmpty(event) {
 		return "", false
 	}
 	return event, true
