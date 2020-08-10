@@ -45,9 +45,9 @@ func main() {
 ```
 
 # API goami2
----
+```go
     import "github.com/staskobzar/goami2"
-
+```
 
 ## Usage
 
