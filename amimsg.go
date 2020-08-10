@@ -28,13 +28,24 @@ type AMIMsg struct {
 	t  msgType
 }
 
-func keyForm(key *string) {
-	*key = strings.TrimSpace(*key)
-	*key = strings.ToLower(*key)
+func strVal(str string, toLower bool) string {
+	str = strings.TrimSpace(str)
+	if toLower {
+		str = strings.ToLower(str)
+	}
+	return str
 }
 
-func valForm(val *string) {
-	*val = strings.TrimSpace(*val)
+func splitKeyVal(str, sep string, keyToLow bool) (string, string) {
+	split := strings.SplitN(str, sep, 2)
+	if len(split) == 1 {
+		key := strVal(split[0], keyToLow)
+		return key, ""
+	}
+	key := strVal(split[0], keyToLow)
+	val := strVal(split[1], false)
+
+	return key, val
 }
 
 // NewAMIMsg create new AMIMsg
@@ -44,20 +55,15 @@ func NewAMIMsg(text string) *AMIMsg {
 	msg.v.Store(make(fields))
 	msg.cv.Store(make(fields))
 	for _, str := range strings.Split(text, "\r\n") {
-		msg.addField(str)
+		if len(str) > 0 {
+			msg.addField(str)
+		}
 	}
 	return msg
 }
 
 func (m *AMIMsg) addField(str string) {
-	split := strings.SplitN(str, ":", 2)
-	if len(split) < 2 {
-		return
-	}
-	// key := strings.ToLower(split[0])
-	key, val := split[0], split[1]
-	keyForm(&key)
-	valForm(&val)
+	key, val := splitKeyVal(str, ":", true)
 
 	m.setType(key)
 
@@ -84,8 +90,7 @@ func (m *AMIMsg) storeField(key, val string) {
 func (m *AMIMsg) storeVariable(fieldValue string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	split := strings.SplitN(fieldValue, "=", 2)
-	name, val := split[0], split[1]
+	name, val := splitKeyVal(fieldValue, "=", false)
 	data := m.v.Load().(fields)
 	data[name] = val
 	m.v.Store(data)
@@ -94,8 +99,7 @@ func (m *AMIMsg) storeVariable(fieldValue string) {
 func (m *AMIMsg) storeChanVariable(fieldValue string) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	split := strings.SplitN(fieldValue, "=", 2)
-	name, val := split[0], split[1]
+	name, val := splitKeyVal(fieldValue, "=", false)
 	data := m.cv.Load().(fields)
 	data[name] = val
 	m.cv.Store(data)
@@ -114,7 +118,7 @@ func (m *AMIMsg) setType(key string) {
 func (m *AMIMsg) Field(key string) string {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	keyForm(&key)
+	key = strVal(key, true)
 	f := m.f.Load().(fields)
 	if val, ok := f[key]; ok {
 		return val
@@ -157,10 +161,10 @@ func (m *AMIMsg) Var(key string) (string, bool) {
 
 // AddField push new field to AMI package.
 // If field already set then override the value
-func (m *AMIMsg) AddField(key string, value string) {
-	keyForm(&key)
-	valForm(&value)
-	m.storeField(key, value)
+func (m *AMIMsg) AddField(key, val string) {
+	key = strVal(key, true)
+	val = strVal(val, false)
+	m.storeField(key, val)
 }
 
 // DelField deletes field from the AMIMsg

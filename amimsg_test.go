@@ -116,6 +116,40 @@ func TestAMIMsgVarField(t *testing.T) {
 	assert.Equal(t, "frogs jump", v)
 }
 
+func TestAMIMsgVarFieldWhereVarHasNoValue(t *testing.T) {
+	inStr := "Event: QueueJoin\r\n" +
+		"ActionId: SDY4-12837-123878782\r\n" +
+		"Channel: PJSIP/kermit-00000002\r\n" +
+		"Context: outbound\r\n" +
+		"Exten: s\r\n" +
+		"Priority: 1\r\n" +
+		"CallerID: \"Kermit the Frog\" <123-4567>\r\n" +
+		"Account: FrogLegs\r\n" +
+		"Variable: FOO\r\n" +
+		"Variable: account=\r\n" +
+		"ChanVariable: realm=\r\n" +
+		"ChanVariable: SIPURI\r\n"
+	msg := NewAMIMsg(inStr)
+	v, ok := msg.Var("foo")
+	assert.False(t, ok)
+
+	v, ok = msg.Var("FOO")
+	assert.True(t, ok)
+	assert.Empty(t, v)
+
+	v, ok = msg.Var("account")
+	assert.True(t, ok)
+	assert.Empty(t, v)
+
+	v, ok = msg.Var("realm")
+	assert.True(t, ok)
+	assert.Empty(t, v)
+
+	v, ok = msg.Var("SIPURI")
+	assert.True(t, ok)
+	assert.Empty(t, v)
+}
+
 func TestAMIMsgResponse(t *testing.T) {
 	inStr := "Response: Success\r\n" +
 		"EventList: start\r\n" +
