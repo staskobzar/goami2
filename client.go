@@ -112,6 +112,25 @@ func (c *Client) Action(actionName string, fields map[string]string) (chan *AMIM
 	return ch, nil
 }
 
+// Send AMIMsg to AMI server
+func (c *Client) Send(msg *Action) (chan *AMIMsg, error) {
+	actionID := msg.ActionID()
+	if actionID == "" {
+		return nil, errors.New("failed to set response channel for empty ActionID")
+	}
+
+	ch, err := c.pool.add(actionID)
+	if err != nil {
+		return nil, err
+	}
+	err = c.send(msg.Message())
+	if err != nil {
+		c.err <- err
+		return nil, err
+	}
+	return ch, nil
+}
+
 // Login action. Blocking and waits response.
 func (c *Client) Login(user, pass string) error {
 	action := NewAction()

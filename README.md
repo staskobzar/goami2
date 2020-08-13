@@ -283,3 +283,10 @@ func (c *Client) OnEvent(event string) (chan *AMIMsg, error)
 ```
 OnEvent provides channel for specific event. Returns error if listener for event
 already created.
+
+#### func (*Client) Send
+
+```go
+func (c *Client) Send(msg *Action) (chan *AMIMsg, error)
+```
+Send AMIMsg to AMI server

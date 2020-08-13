@@ -165,6 +165,29 @@ func TestClientCloseWithErrorChannel(t *testing.T) {
 	assert.False(t, open)
 }
 
+func TestClientSendAMIMsg(t *testing.T) {
+	wConn, rConn := net.Pipe()
+	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
+	client, err := NewClient(rConn)
+	assert.Nil(t, err)
+
+	action, err := ActionFromJSON(`{"action":"QueueStatus","queue":"Sales"}`)
+	assert.Nil(t, err)
+
+	ch := make(chan string)
+	go func() {
+		defer close(ch)
+		scanner := bufio.NewScanner(wConn)
+		scanner.Scan()
+		ch <- scanner.Text()
+	}()
+
+	_, err = client.Send(action)
+	assert.Nil(t, err)
+	input := <-ch
+	assert.Contains(t, input, "Action: QueueStatus")
+}
+
 func TestClientAnyEventConsumer(t *testing.T) {
 	events := []string{
 		"Event: Hold\r\n" +
