@@ -62,6 +62,33 @@ func createFromJsonWithActionId(t *testing.T) {
 		"ActionID: "+a.ActionID()+"\r\n")
 }
 
+func createFromJsonWithVars(t *testing.T) {
+	jsonStr := `{"action":"Originate","channel":"Local/5555@confbridge-invite",` +
+		`"exten":"MEETME_5555","priority":10,"context":"confbridge-join-member",` +
+		`"callerid":"\"Alice\" <7777>","variable":` +
+		`{"realm":"sip.conference.com","pin":"1234","confid":4567}}`
+	a, err := ActionFromJSON(jsonStr)
+	assert.Nil(t, err)
+	assert.Contains(t, string(a.Message()), "Action: Originate\r\n")
+	assert.Contains(t, string(a.Message()), "Variable: pin=1234\r\n")
+	assert.Contains(t, string(a.Message()), "Variable: confid=4567\r\n")
+}
+
+func createFromJsonWithChanVars(t *testing.T) {
+	jsonStr := `{"action":"Originate","channel":"Local/5555@confbridge-invite",` +
+		`"exten":"MEETME_5555","priority":10,"context":"confbridge-join-member",` +
+		`"variable":{"pin":"","confid":5990},` +
+		`"chanvariable":{"external":true,"prefix":"000"}}`
+	a, err := ActionFromJSON(jsonStr)
+	assert.Nil(t, err)
+	assert.Contains(t, string(a.Message()), "Action: Originate\r\n")
+	assert.Contains(t, string(a.Message()), "Priority: 10\r\n")
+	assert.Contains(t, string(a.Message()), "Variable: pin=\r\n")
+	assert.Contains(t, string(a.Message()), "Variable: confid=5990\r\n")
+	assert.Contains(t, string(a.Message()), "Chanvariable: external=true\r\n")
+	assert.Contains(t, string(a.Message()), "Chanvariable: prefix=000\r\n")
+}
+
 func TestAction(t *testing.T) {
 	action = NewAction()
 
@@ -71,4 +98,8 @@ func TestAction(t *testing.T) {
 	t.Run("Action generate from JSON", createFromJson)
 	t.Run("Action generate from JSON and add ActionID",
 		createFromJsonWithActionId)
+	t.Run("Action generate from JSON with variables",
+		createFromJsonWithVars)
+	t.Run("Action generate from JSON with ChanVariable",
+		createFromJsonWithChanVars)
 }

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"strings"
 )
 
@@ -22,6 +23,9 @@ func NewAction() *Action {
 }
 
 // ActionFromJSON convert JSON string to action structure
+// Supports only two level JSON structure for Variable and ChanVariable
+// fields:
+// ```{"action":"Originate","variable":{"foo":"bar","xyz":true}}```
 func ActionFromJSON(source string) (*Action, error) {
 	var jb interface{}
 	action := NewAction()
@@ -31,7 +35,16 @@ func ActionFromJSON(source string) (*Action, error) {
 	}
 
 	for k, v := range jb.(map[string]interface{}) {
-		action.Field(strings.Title(k), v.(string))
+		ftype := reflect.ValueOf(v)
+		switch ftype.Kind() {
+		case reflect.Map:
+			for name, val := range v.(map[string]interface{}) {
+				action.Field(strings.Title(k),
+					fmt.Sprintf("%s=%v", name, val))
+			}
+		default:
+			action.Field(strings.Title(k), fmt.Sprintf("%v", v))
+		}
 		if strings.EqualFold(k, "actionid") {
 			action.aid = v.(string)
 		}
@@ -67,7 +80,7 @@ func (a *Action) ActionID() string {
 	return a.aid
 }
 
-// Field gets Action message
+// Field add to Action message
 func (a *Action) Field(header, value string) {
 	a.WriteString(header + ": " + value + crlf)
 }
