@@ -185,6 +185,7 @@ type pool struct {
 }
 
 type message struct {
+	mu     sync.Mutex
 	ch     chan *AMIMsg
 	isList bool
 }
@@ -220,7 +221,9 @@ func (p *pool) dispatchAction(actionID string, msg *AMIMsg) {
 	resp.ch <- msg // dispatch message
 
 	if msg.IsEventListStart() {
+		resp.mu.Lock()
 		resp.isList = true
+		resp.mu.Unlock()
 		p.update(actionID, resp)
 	}
 

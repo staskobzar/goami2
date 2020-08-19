@@ -178,13 +178,24 @@ func TestClientSendAMIMsg(t *testing.T) {
 	go func() {
 		defer close(ch)
 		scanner := bufio.NewScanner(wConn)
-		scanner.Scan()
-		ch <- scanner.Text()
+		for scanner.Scan() {
+			txt := scanner.Text()
+			ch <- txt
+			if txt == "" {
+				break
+			}
+		}
 	}()
 
 	_, err = client.Send(action)
 	assert.Nil(t, err)
-	input := <-ch
+	input := ""
+	for line := range ch {
+		if line == "" {
+			break
+		}
+		input = fmt.Sprintf("%s%s", input, line)
+	}
 	assert.Contains(t, input, "Action: QueueStatus")
 }
 

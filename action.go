@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+	"sync"
 )
 
 const crlf = "\r\n"
@@ -14,6 +15,7 @@ const crlf = "\r\n"
 // Action structure
 type Action struct {
 	bytes.Buffer
+	mu  sync.Mutex
 	aid string
 }
 
@@ -77,6 +79,8 @@ func (a *Action) writeActionID() {
 
 // ActionID returns AMI ActionID value
 func (a *Action) ActionID() string {
+	a.mu.Lock()
+	defer a.mu.Unlock()
 	return a.aid
 }
 
