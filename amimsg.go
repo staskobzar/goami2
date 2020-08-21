@@ -273,7 +273,7 @@ func (m *AMIMsg) JSON() string {
 
 	// ChanVariable
 	chanvars := m.cv.Load().(fields)
-	if len(variables) > 0 {
+	if len(chanvars) > 0 {
 		data["chanvariable"] = chanvars
 	}
 

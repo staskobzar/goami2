@@ -212,3 +212,29 @@ func TestAMIMsgToJsonWithVariables(t *testing.T) {
 		`"variable":{"DIR":"inbound","extern":"true"}}`
 	assert.JSONEq(t, matchStr, json)
 }
+
+func TestAMIMsgToJsonChanVarsOnly(t *testing.T) {
+	inStr := "Event: BridgeEnter\r\n" +
+		"BridgeUniqueid: 2afaa52e-a19e-4052-abe6-17d6e000b4b2\r\n" +
+		"BridgeType: basic\r\n" +
+		"Channel: SIP/9170-12-00000350\r\n" +
+		"ChannelState: 6\r\n" +
+		"CallerIDNum: 9170\r\n" +
+		"CallerIDName: Bud Heller\r\n" +
+		"Exten: 7711\r\n" +
+		"Priority: 9\r\n" +
+		"ChanVariable: realm=okon.ferry.clusterpbx.xyz\r\n" +
+		"ChanVariable: SIPCALLID=89r8lq8cta2k2mvo7cbj\r\n"
+	msg := NewAMIMsg(inStr)
+
+	cvRealm, ok := msg.ChanVariable("realm")
+	assert.True(t, ok)
+	assert.Equal(t, "okon.ferry.clusterpbx.xyz", cvRealm)
+	matchJson := `{"bridgetype":"basic","bridgeuniqueid":"2afaa52e-a19e-4052-abe6-17d6e000b4b2",` +
+		`"calleridname":"Bud Heller","calleridnum":"9170",` +
+		`"channel":"SIP/9170-12-00000350","channelstate":"6",` +
+		`"chanvariable":{"SIPCALLID":"89r8lq8cta2k2mvo7cbj","realm":"okon.ferry.clusterpbx.xyz"},` +
+		`"event":"BridgeEnter","exten":"7711","priority":"9"}`
+	json := msg.JSON()
+	assert.JSONEq(t, matchJson, json)
+}
