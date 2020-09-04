@@ -1,278 +1,249 @@
 package goami2
 
 import (
+	"bufio"
 	"context"
-	"errors"
 	"net"
+	"net/textproto"
 	"strings"
 	"sync"
 	"time"
 )
 
-type eventKey string
+// NetTOUT timeout for net connections and requests
+var NetTOUT = time.Second * 3
 
-const (
-	anyEventKey  = "any-event-c27ffb3c3a56490"
-	loginTimeout = 3 * time.Second
-)
+// ErrorConnTOUT error on connection timeout
+var ErrorConnTOUT = errorNew("Connection timeout")
+
+// ErrorInvalidPrompt invalid prompt received from AMI server
+var ErrorInvalidPrompt = errorNew("Invalid prompt on AMI server")
+
+// ErrorNet networking errors
+var ErrorNet = errorNew("Network error")
+
+// ErrorLogin AMI server login failed
+var ErrorLogin = errorNew("Login failed")
 
 // Client structure
 type Client struct {
+	mu     sync.RWMutex
+	reader *textproto.Reader
+	writer *bufio.Writer
 	conn   net.Conn
-	err    chan error
 	cancel context.CancelFunc
-	pool   *pool
+	subs   *pubsub
+	err    chan error
 }
 
-// NewClient creates new AMI client and returns client or error
-func NewClient(conn net.Conn) (*Client, error) {
-	ctx, cancel := context.WithCancel(context.Background())
-	client := &Client{
-		conn:   conn,
-		err:    make(chan error, 1),
-		cancel: cancel,
-		pool:   newPool(),
-	}
-
-	ch, err := connPipeline(ctx, conn, client.err)
-	if err != nil {
+// NewClient connects to Asterisk using conn and tries to login using
+// username and password. Creates new AMI client and returns client or error
+func NewClient(conn net.Conn, username, password string) (*Client, error) {
+	client, ctx := newClient(conn)
+	if err := client.readPrompt(ctx, NetTOUT); err != nil {
 		return nil, err
 	}
 
-	go func() {
-		defer conn.Close()
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case msg := <-ch:
-				client.pool.dispatch(msg)
-			}
-		}
-	}()
+	if err := client.login(ctx, NetTOUT, username, password); err != nil {
+		return nil, err
+	}
+
+	client.initReader(ctx)
+
 	return client, nil
 }
 
-// Close client and stop all routines
-func (c *Client) Close() {
-	c.cancel()
-	close(c.err)
-	c.conn.Close()
+// AnyEvent	subscribes to any Event received from Asterisk server
+// returns send-only channel or nil
+func (c *Client) AnyEvent() <-chan Message {
+	return c.subs.subAnyEvent()
 }
 
-// Error returns channel with connection errors
-func (c *Client) Error() <-chan error {
+// OnEvent subscribes by event by name (case insensative) and
+// returns send-only channel or nil
+func (c *Client) OnEvent(name string) <-chan Message {
+	return c.subs.subByKey(name)
+}
+
+// Action sends AMI message to Asterisk server and returns send-only
+// response channel on nil
+func (c *Client) Action(msg Message) <-chan Message {
+	if msg.ActionID() == "" {
+		msg.AddActionID()
+	}
+
+	actionid := msg.ActionID()
+
+	return c.subs.subByKey(actionid)
+}
+
+// Close client and destroy all subscriptions to events and action responses
+func (c *Client) Close() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.cancel()
+	c.subs.destroy()
+	c.conn.Close()
+	close(c.err)
+	c.err = nil
+}
+
+// Err retuns channel for error and signals that client should be probably restarted
+func (c *Client) Err() <-chan error {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
 	return c.err
 }
 
-// AnyEvent provides channel for any AMI events received
-func (c *Client) AnyEvent() (chan *AMIMsg, error) {
-	ch, err := c.pool.add(anyEventKey)
-	if err != nil {
-		return nil, err
+func newClient(conn net.Conn) (*Client, context.Context) {
+	ctx, cancel := context.WithCancel(context.Background())
+	client := &Client{
+		reader: textproto.NewReader(bufio.NewReader(conn)),
+		writer: bufio.NewWriter(conn),
+		conn:   conn,
+		cancel: cancel,
 	}
-	return ch, nil
+	return client, ctx
 }
 
-// OnEvent provides channel for specific event.
-// Returns error if listener for event already created.
-func (c *Client) OnEvent(event string) (chan *AMIMsg, error) {
-	event = strings.ToLower(event)
-
-	ch, err := c.pool.add(event)
-	if err != nil {
-		return nil, err
-	}
-
-	return ch, nil
-}
-
-// Action send to Asterisk MI.
-// ActionID will be generated.
-func (c *Client) Action(actionName string, fields map[string]string) (chan *AMIMsg, error) {
-	action := NewAction()
-	action.New(actionName)
-	actionID := action.ActionID()
-
-	if actionID == "" {
-		return nil, errors.New("failed to set response channel for empty ActionID")
-	}
-	ch, err := c.pool.add(actionID)
-	if err != nil {
-		return nil, err
-	}
-	for header, val := range fields {
-		action.Field(header, val)
-	}
-	err = c.send(action.Message())
-	if err != nil {
-		c.err <- err
-		return nil, err
-	}
-	return ch, nil
-}
-
-// Send AMIMsg to AMI server
-func (c *Client) Send(msg *Action) (chan *AMIMsg, error) {
-	actionID := msg.ActionID()
-	if actionID == "" {
-		return nil, errors.New("failed to set response channel for empty ActionID")
-	}
-
-	ch, err := c.pool.add(actionID)
-	if err != nil {
-		return nil, err
-	}
-	err = c.send(msg.Message())
-	if err != nil {
-		c.err <- err
-		return nil, err
-	}
-	return ch, nil
-}
-
-// Login action. Blocking and waits response.
-func (c *Client) Login(user, pass string) error {
-	action := NewAction()
-	login := action.Login(user, pass)
-	ch, err := c.pool.add(action.ActionID())
-	if err != nil {
-		return err
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), loginTimeout)
+func (c *Client) readPrompt(parentCtx context.Context, tout time.Duration) error {
+	ctx, cancel := context.WithTimeout(parentCtx, tout)
 	defer cancel()
-	if err := c.send(login); err != nil {
-		return err
+
+	reader := func() (chan string, chan error) {
+		prompt := make(chan string)
+		fail := make(chan error)
+		go func() {
+			defer close(prompt)
+			defer close(fail)
+			line, err := c.reader.ReadLine()
+			if err != nil {
+				fail <- err
+				return
+			}
+			prompt <- line
+		}()
+		return prompt, fail
 	}
+
+	prompt, fail := reader()
 	select {
 	case <-ctx.Done():
-		return errors.New("login timeout")
-	case resp := <-ch:
-		if resp.IsSuccess() {
-			return nil
+		return ErrorConnTOUT
+	case err := <-fail:
+		return ErrorNet.msg(err.Error())
+	case promptLine := <-prompt:
+		if !strings.HasPrefix(promptLine, "Asterisk Call Manager") {
+			return ErrorInvalidPrompt.msg(promptLine)
 		}
-		return errors.New(resp.Message())
 	}
+	return nil
 }
 
-func (c *Client) send(action []byte) error {
-	_, err := c.conn.Write(action)
-	if err != nil {
+func (c *Client) login(parentCtx context.Context, tout time.Duration, user, pass string) error {
+	ctx, cancel := context.WithTimeout(parentCtx, tout)
+	defer cancel()
+
+	msg := loginMessage(user, pass)
+
+	reader := func() (chan Message, chan error) {
+		chMsg := make(chan Message)
+		fail := make(chan error)
+		go func() {
+			defer close(chMsg)
+			defer close(fail)
+			msg, err := c.read()
+			if err != nil {
+				fail <- err
+				return
+			}
+			chMsg <- msg
+		}()
+		return chMsg, fail
+	}
+
+	chMsg, fail := reader()
+	if err := c.write(msg.Bytes()); err != nil {
+		return err
+	}
+
+	select {
+	case <-ctx.Done():
+		return ErrorConnTOUT.msg("failed login")
+	case err := <-fail:
+		return ErrorNet.msg(err.Error())
+	case msg := <-chMsg:
+		if !msg.IsSuccess() {
+			return ErrorLogin
+		}
+	}
+
+	return nil
+}
+
+func (c *Client) initReader(ctx context.Context) {
+	c.subs = newPubsub()
+	c.err = make(chan error)
+
+	go func() {
+		defer c.subs.disable()
+		for {
+			select {
+			case <-ctx.Done():
+				c.emitError(ctx.Err())
+				return
+			default:
+				msg, err := c.read()
+				if ctx.Err() != nil {
+					c.emitError(ctx.Err())
+					return // already closed
+				}
+				if err != nil {
+					c.emitError(err)
+					return
+				}
+				c.publish(ctx, msg)
+			}
+		}
+	}()
+}
+
+func (c *Client) publish(ctx context.Context, msg Message) {
+	c.subs.publish(msg)
+}
+
+func (c *Client) emitError(err error) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if err == nil {
+		return
+	}
+	if c.err == nil {
+		return
+	}
+	go func(err error) {
+		c.err <- err
+	}(err)
+}
+
+func (c *Client) write(msg []byte) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if _, err := c.writer.Write(msg); err != nil {
+		return err
+	}
+	if err := c.writer.Flush(); err != nil {
 		return err
 	}
 	return nil
 }
 
-func connPipeline(ctx context.Context, conn net.Conn, cherr chan<- error) (<-chan *AMIMsg, error) {
-	var err error
-
-	err = readPrompt(ctx, conn)
+func (c *Client) read() (Message, error) {
+	var msg Message
+	headers, err := c.reader.ReadMIMEHeader()
 	if err != nil {
-		return nil, err
+		return msg, err
 	}
-
-	chanOut, err := newReader(ctx, conn, cherr)
-	if err != nil {
-		return nil, err
-	}
-	return chanOut, nil
-}
-
-// pool of events and responses with dispatcher
-type pool struct {
-	m *sync.Map
-}
-
-type message struct {
-	mu     sync.Mutex
-	ch     chan *AMIMsg
-	isList bool
-}
-
-func newPool() *pool {
-	p := &pool{m: &sync.Map{}}
-	return p
-}
-
-func (p *pool) dispatch(msg *AMIMsg) {
-	if msg == nil {
-		return
-	}
-	// dispatch message to Action listener
-	go func(m *AMIMsg) {
-		if actionID, exists := m.ActionID(); exists {
-			p.dispatchAction(actionID, m)
-		}
-	}(msg)
-
-	// dispatch to Event listeners
-	go func(m *AMIMsg) {
-		p.dispatchEvent(m)
-	}(msg)
-}
-
-func (p *pool) dispatchAction(actionID string, msg *AMIMsg) {
-	resp := p.get(actionID)
-	if resp == nil {
-		return
-	}
-
-	resp.ch <- msg // dispatch message
-
-	if msg.IsEventListStart() {
-		resp.mu.Lock()
-		resp.isList = true
-		resp.mu.Unlock()
-		p.update(actionID, resp)
-	}
-
-	if !resp.isList || msg.IsEventListEnd() {
-		close(resp.ch)
-		p.delete(actionID)
-	}
-}
-
-func (p *pool) dispatchEvent(msg *AMIMsg) {
-	eventName, ok := msg.Event()
-	if !ok {
-		return
-	}
-
-	if event := p.get(strings.ToLower(eventName)); event != nil {
-		event.ch <- msg // dispatch event to listener
-	}
-
-	if anyEvent := p.get(anyEventKey); anyEvent != nil {
-		anyEvent.ch <- msg // dispatch event to AnyEvent listener
-	}
-}
-
-func (p *pool) add(actionID string) (chan *AMIMsg, error) {
-	ch := make(chan *AMIMsg)
-	s := &message{
-		ch:     ch,
-		isList: false,
-	}
-	if _, ok := p.m.LoadOrStore(eventKey(actionID), s); ok {
-		return nil, errors.New("Action ID is already in pool: " + actionID)
-	}
-	return ch, nil
-}
-
-func (p *pool) get(key string) *message {
-	val, exists := p.m.Load(eventKey(key))
-	if !exists {
-		return nil
-	}
-	return val.(*message)
-}
-
-func (p *pool) update(actionID string, msg *message) {
-	p.delete(actionID)
-	p.m.Store(eventKey(actionID), msg)
-}
-
-func (p *pool) delete(actionID string) {
-	p.m.Delete(eventKey(actionID))
+	msg = newMessage(headers)
+	return msg, nil
 }

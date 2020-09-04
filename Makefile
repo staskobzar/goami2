@@ -1,6 +1,6 @@
 # GO AMI v2 protocol implementation
 #
-.PHONY: test cov bench
+.PHONY: test cov bench clean
 
 test:
 	go test -race -cover
@@ -14,3 +14,10 @@ vet:
 
 bench:
 	@go test -bench=.
+
+readme:
+	mdr README.md
+
+clean:
+	rm -f coverage.out
+	go clean

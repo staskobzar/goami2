@@ -2,310 +2,202 @@ package goami2
 
 import (
 	"bufio"
-	"fmt"
 	"net"
-	"strings"
+	"net/textproto"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func amiResponseServer(conn net.Conn, response []string) {
+func srvPrompt(prompt string) net.Conn {
+	r, w := net.Pipe()
 	go func() {
-		scanner := bufio.NewScanner(conn)
-		var actionid string
+		defer w.Close()
+		if prompt == "timeout" {
+			<-time.After(4 * time.Second)
+		}
+		w.Write([]byte(prompt))
+	}()
+	return r
+}
+
+func srvLogin(response string) net.Conn {
+	cln, srv := net.Pipe()
+
+	m := newMessage(textproto.MIMEHeader{"Response": []string{response}})
+	m.AddField("Message", "Login response")
+	go func() {
+		defer srv.Close()
+		scanner := bufio.NewScanner(srv)
 		for scanner.Scan() {
-			s := scanner.Text()
-			fmt.Sscanf(s, "ActionID: %s", &actionid)
-			if s == "" {
+			text := scanner.Text()
+			if text == "" {
+				if response == "timeout" {
+					<-time.After(4 * time.Second)
+				}
+				srv.Write(m.Bytes())
 				break
 			}
 		}
-		for _, s := range response {
-			s = strings.Replace(s, "$ACTIONID$", actionid, 1)
-			conn.Write([]byte(s))
-		}
 	}()
+	return cln
 }
 
-func TestClientLoginSuccess(t *testing.T) {
-	response := []string{
-		"Response: Success\r\n",
-		"ActionID: $ACTIONID$\r\n",
-		"Message: Authentication accepted\r\n\r\n",
-	}
-	wConn, rConn := net.Pipe()
-	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
-	client, err := NewClient(rConn)
-	assert.Nil(t, err)
-
-	amiResponseServer(wConn, response)
-
-	err = client.Login("admin", "password")
-	assert.Nil(t, err)
-}
-
-func TestClientLoginFailed(t *testing.T) {
-	response := []string{
-		"Response: Error\r\n",
-		"ActionID: $ACTIONID$\r\n",
-		"Message: Authentication failed\r\n\r\n",
-	}
-	wConn, rConn := net.Pipe()
-	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
-	client, err := NewClient(rConn)
-	assert.Nil(t, err)
-
-	amiResponseServer(wConn, response)
-
-	err = client.Login("admin", "password")
-	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "Authentication failed")
-	// assert.Zero(t, len(client.p.actionConsumer))
-}
-
-func TestClientEventList(t *testing.T) {
-	response := []string{
-		"Response: Success\r\n",
-		"ActionID: $ACTIONID$\r\n",
-		"EventList: start\r\n",
-		"Message: Queue summary will follow\r\n",
-		"\r\n",
-		"Event: QueueSummary\r\n",
-		"Queue: Sales\r\n",
-		"LoggedIn: 2\r\n",
-		"Available: 2\r\n",
-		"Callers: 0\r\n",
-		"HoldTime: 0\r\n",
-		"TalkTime: 0\r\n",
-		"LongestHoldTime: 0\r\n",
-		"ActionID: $ACTIONID$\r\n",
-		"\r\n",
-		"Event: QueueSummary\r\n",
-		"Queue: Reception_12\r\n",
-		"LoggedIn: 2\r\n",
-		"Available: 2\r\n",
-		"Callers: 0\r\n",
-		"HoldTime: 0\r\n",
-		"TalkTime: 0\r\n",
-		"LongestHoldTime: 0\r\n",
-		"ActionID: $ACTIONID$\r\n",
-		"\r\n",
-		"Event: QueueSummaryComplete\r\n",
-		"ActionID: foo-bar1-OTHER-RESPONSE-MIX-TEST\r\n",
-		"EventList: Complete\r\n",
-		"ListItems: 8\r\n",
-		"\r\n",
-		"Event: QueueSummaryComplete\r\n",
-		"ActionID: $ACTIONID$\r\n",
-		"EventList: Complete\r\n",
-		"ListItems: 2\r\n",
-		"\r\n",
-	}
-	wConn, rConn := net.Pipe()
-	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
-	client, err := NewClient(rConn)
-	assert.Nil(t, err)
-
-	amiResponseServer(wConn, response)
-	ch, err := client.Action("QueueSummary", nil)
-	assert.Nil(t, err)
-	N := 0
-	EN := 0
-	for msg := range ch {
-		N++
-		if msg.IsEvent() {
-			EN++
-		}
-	}
-	// assert.Zero(t, len(client.p.actionConsumer))
-	assert.Equal(t, N, 4)
-	assert.Equal(t, EN, 3)
-}
-
-func TestActionErrorChannel(t *testing.T) {
-	response := []string{
-		"Response: Success\r\n",
-		"ActionID: $ACTIONID$\r\n",
-		"Message: Success",
-	}
-
-	wConn, rConn := net.Pipe()
-	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
-	client, err := NewClient(rConn)
-	assert.Nil(t, err)
-
-	amiResponseServer(wConn, response)
-	rConn.Close()
-
-	chErr := make(chan error)
+func amiFakeSrv(login string) net.Conn {
+	cln, srv := net.Pipe()
+	m := newMessage(textproto.MIMEHeader{"Response": []string{login}})
+	m.AddField("Message", "Login response")
 	go func() {
-		err := <-client.Error()
-		chErr <- err
+		defer srv.Close()
+		// write prompt
+		srv.Write([]byte("Asterisk Call Manager/2.10.4\n"))
+		scanner := bufio.NewScanner(srv)
+		for scanner.Scan() {
+			text := scanner.Text()
+			if text == "" {
+				srv.Write(m.Bytes())
+			}
+		}
+		if err := scanner.Err(); err != nil {
+			panic(err)
+		}
 	}()
-
-	_, err = client.Action("QueueSummary", nil)
-	assert.NotNil(t, err)
-
-	errFromChan := <-chErr
-	assert.Equal(t, err, errFromChan)
+	return cln
 }
 
-func TestClientCloseWithErrorChannel(t *testing.T) {
-	wConn, rConn := net.Pipe()
-	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
-	client, err := NewClient(rConn)
-	assert.Nil(t, err)
+func TestClient_readPrompt_invalid_prompt(t *testing.T) {
+	conn := srvPrompt("foo\n")
+	defer conn.Close()
 
-	_, err = client.AnyEvent()
+	c, ctx := newClient(conn)
+	err := c.readPrompt(ctx, NetTOUT)
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrorInvalidPrompt, err)
+}
+
+func TestClient_readPrompt_connect_timeout(t *testing.T) {
+	conn := srvPrompt("timeout")
+	defer conn.Close()
+
+	c, ctx := newClient(conn)
+	err := c.readPrompt(ctx, time.Millisecond*10)
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrorConnTOUT, err)
+}
+
+func TestClient_readPrompt_network_fail(t *testing.T) {
+	conn := srvPrompt("Asterisk Call Manager/2.10.4\n")
+	c, ctx := newClient(conn)
+	conn.Close()
+	err := c.readPrompt(ctx, NetTOUT)
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Network error")
+}
+
+func TestClient_readPrompt(t *testing.T) {
+	conn := srvPrompt("Asterisk Call Manager/2.10.4\n")
+	defer conn.Close()
+
+	c, ctx := newClient(conn)
+	err := c.readPrompt(ctx, NetTOUT)
 	assert.Nil(t, err)
-	// close error channel
+}
+
+func TestClient_login_success(t *testing.T) {
+	conn := srvLogin("Success")
+	defer conn.Close()
+
+	c, ctx := newClient(conn)
+	err := c.login(ctx, NetTOUT, "admin", "pa55w0rd")
+	assert.Nil(t, err)
+}
+
+func TestClient_login_failed(t *testing.T) {
+	conn := srvLogin("Error")
+	defer conn.Close()
+
+	c, ctx := newClient(conn)
+	err := c.login(ctx, NetTOUT, "admin", "pa55w0rd")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrorLogin, err)
+}
+
+func TestClient_login_timeout(t *testing.T) {
+	conn := srvLogin("timeout")
+	defer conn.Close()
+
+	c, ctx := newClient(conn)
+	tout := 10 * time.Millisecond
+	err := c.login(ctx, tout, "admin", "pa55w0rd")
+	assert.NotNil(t, err)
+	assert.Equal(t, ErrorConnTOUT, err)
+}
+
+func TestClient_NewClient_fail_login(t *testing.T) {
+	conn := amiFakeSrv("Failed")
+	_, err := NewClient(conn, "admin", "pass")
+	assert.NotNil(t, err)
+	assert.Contains(t, err.Error(), "Login failed")
+}
+
+func TestClient_AnyEvent(t *testing.T) {
+	conn := amiFakeSrv("Success")
+	defer conn.Close()
+	client, err := NewClient(conn, "admin", "pass")
+	assert.Nil(t, err)
+	ch := client.AnyEvent()
+	assert.NotNil(t, ch)
+}
+
+func TestClient_Action(t *testing.T) {
+	conn := amiFakeSrv("Success")
+	defer conn.Close()
+	client, err := NewClient(conn, "admin", "pass")
+	assert.Nil(t, err)
+	ch := client.Action(NewAction("CoreStatus"))
+	assert.NotNil(t, ch)
+}
+
+func TestClient_Close(t *testing.T) {
+	conn := amiFakeSrv("Success")
+	client, err := NewClient(conn, "admin", "pass")
+	assert.Nil(t, err)
+	client.AnyEvent()
+
+	assert.Equal(t, 1, len(client.subs.subs))
+
 	client.Close()
-	err, open := <-client.Error()
-	assert.False(t, open)
+	client.subs.mu.RLock()
+	l := len(client.subs.subs)
+	client.subs.mu.RUnlock()
+	assert.Equal(t, 0, l)
+	_, err = conn.Write([]byte("foo"))
+	assert.NotNil(t, err) // connection is already closed
 }
 
-func TestClientSendAMIMsg(t *testing.T) {
-	wConn, rConn := net.Pipe()
-	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
-	client, err := NewClient(rConn)
+func TestClient_fails_subscribe_on_closed(t *testing.T) {
+	conn := amiFakeSrv("Success")
+	client, err := NewClient(conn, "admin", "pass")
 	assert.Nil(t, err)
 
-	action, err := ActionFromJSON(`{"action":"QueueStatus","queue":"Sales"}`)
-	assert.Nil(t, err)
-
-	ch := make(chan string)
-	go func() {
-		defer close(ch)
-		scanner := bufio.NewScanner(wConn)
-		for scanner.Scan() {
-			txt := scanner.Text()
-			ch <- txt
-			if txt == "" {
-				break
-			}
-		}
-	}()
-
-	_, err = client.Send(action)
-	assert.Nil(t, err)
-	input := ""
-	for line := range ch {
-		if line == "" {
-			break
-		}
-		input = fmt.Sprintf("%s%s", input, line)
-	}
-	assert.Contains(t, input, "Action: QueueStatus")
+	client.Close()
+	ch := client.OnEvent("NewExten")
+	assert.Nil(t, ch)
+	ch = client.AnyEvent()
+	assert.Nil(t, ch)
+	ch = client.Action(NewAction("CoreStatus"))
+	assert.Nil(t, ch)
 }
 
-func TestClientAnyEventConsumer(t *testing.T) {
-	events := []string{
-		"Event: Hold\r\n" +
-			"Privilege: call,all\r\n" +
-			"Channel: SIP/monvet.modulis.clusterpbx.ca-00008bc8\r\n" +
-			"ConnectedLineName: HVE:ANIMONDE TERREB\r\n" +
-			"Context: dial-simple\r\n" +
-			"Exten: 221\r\n" +
-			"Priority: 1\r\n" +
-			"\r\n",
-		"Event: MusicOnHoldStart\r\n" +
-			"Privilege: call,all\r\n" +
-			"Channel: Local/221-1259@from-queue-00008258;2\r\n" +
-			"ChannelState: 6\r\n" +
-			"Exten: 221\r\n" +
-			"Priority: 2\r\n" +
-			"Class: default@monvet.modulis.clusterpbx.ca\r\n" +
-			"\r\n",
-		"Event: RTCPSent\r\n" +
-			"Privilege: reporting,all\r\n" +
-			"Channel: SIP/cc.humark.clusterpbx.ca-00008bef\r\n" +
-			"ChannelState: 6\r\n" +
-			"ChannelStateDesc: Up\r\n" +
-			"Context: dial-simple\r\n" +
-			"Exten: 210\r\n" +
-			"\r\n",
-	}
-	wConn, rConn := net.Pipe()
-	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
-	client, err := NewClient(rConn)
+func TestClient_Err_channel(t *testing.T) {
+	conn := amiFakeSrv("Success")
+	client, err := NewClient(conn, "admin", "pass")
+	defer client.Close()
 	assert.Nil(t, err)
 
-	ch, err := client.AnyEvent()
-	assert.Nil(t, err)
-
-	go func() {
-		for _, s := range events {
-			wConn.Write([]byte(s))
-		}
-	}()
-
-	NE := 0
-	for i := 0; i < len(events); i++ {
-		msg := <-ch
-		if msg.IsEvent() {
-			NE++
-		}
-	}
-	assert.Equal(t, NE, 3)
-}
-
-func TestClientCustomEventConsumer(t *testing.T) {
-	events := []string{
-		"Event: Hold\r\n" +
-			"Privilege: call,all\r\n" +
-			"Channel: SIP/monvet.modulis.clusterpbx.ca-00008bc8\r\n" +
-			"ConnectedLineName: HVE:ANIMONDE TERREB\r\n" +
-			"Context: dial-simple\r\n" +
-			"Exten: 221\r\n" +
-			"Priority: 1\r\n" +
-			"\r\n",
-		"Event: MusicOnHold\r\n" +
-			"Privilege: call,all\r\n" +
-			"Channel: Local/221-1259@from-queue-00008258;2\r\n" +
-			"ChannelState: 6\r\n" +
-			"Exten: 221\r\n" +
-			"Priority: 2\r\n" +
-			"Class: default@monvet.modulis.clusterpbx.ca\r\n" +
-			"\r\n",
-		"Event: RTCPSent\r\n" +
-			"Privilege: reporting,all\r\n" +
-			"Channel: SIP/cc.humark.clusterpbx.ca-00008bef\r\n" +
-			"ChannelState: 6\r\n" +
-			"ChannelStateDesc: Up\r\n" +
-			"Context: dial-simple\r\n" +
-			"Exten: 210\r\n" +
-			"\r\n",
-	}
-	wConn, rConn := net.Pipe()
-	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
-	client, err := NewClient(rConn)
-	assert.Nil(t, err)
-
-	ch, err := client.OnEvent("MusicOnHold")
-	assert.Nil(t, err)
-
-	go func() {
-		for _, s := range events {
-			wConn.Write([]byte(s))
-		}
-	}()
-
-	msg := <-ch
-	assert.True(t, msg.IsEvent())
-	assert.Equal(t, msg.Field("channel"),
-		"Local/221-1259@from-queue-00008258;2")
-}
-
-func TestClientAddExistingEventChan(t *testing.T) {
-	wConn, rConn := net.Pipe()
-	go func() { wConn.Write([]byte("Asterisk Call Manager/2.10.4\r\n")) }()
-	client, err := NewClient(rConn)
-	assert.Nil(t, err)
-	_, err = client.OnEvent("MusicOnHold")
-	assert.Nil(t, err)
-
-	_, err = client.OnEvent("MusicOnHold")
+	conn.Close()
+	err = <-client.Err()
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "already in pool")
+	assert.Contains(t, err.Error(), "on closed")
 }
