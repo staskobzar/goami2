@@ -52,6 +52,7 @@ func amiFakeSrv(login string) net.Conn {
 		defer srv.Close()
 		// write prompt
 		srv.Write([]byte("Asterisk Call Manager/2.10.4\n"))
+		srv.SetReadDeadline(time.Now().Add(time.Millisecond * 100))
 		scanner := bufio.NewScanner(srv)
 		for scanner.Scan() {
 			text := scanner.Text()

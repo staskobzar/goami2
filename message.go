@@ -18,10 +18,15 @@ type Message struct {
 
 // NewAction creats action message
 func NewAction(name string) *Message {
-	h := make(textproto.MIMEHeader)
-	h.Add("Action", name)
-	a := newMessage(h)
+	a := NewMessage()
+	a.AddField("Action", name)
 	return a
+}
+
+// NewMessage creates new empty message
+func NewMessage() *Message {
+	h := make(textproto.MIMEHeader)
+	return newMessage(h)
 }
 
 // FromJSON creates message from JSON string
