@@ -146,7 +146,7 @@ func TestClient_AnyEvent(t *testing.T) {
 	defer conn.Close()
 	client, err := NewClient(conn, "admin", "pass")
 	assert.Nil(t, err)
-	ch := client.AnyEvent()
+	ch := client.AllMessages()
 	assert.NotNil(t, ch)
 }
 
@@ -155,21 +155,21 @@ func TestClient_Action(t *testing.T) {
 	defer conn.Close()
 	client, err := NewClient(conn, "admin", "pass")
 	assert.Nil(t, err)
-	ch := client.Action(NewAction("CoreStatus"))
-	assert.NotNil(t, ch)
+	ok := client.Action(NewAction("CoreStatus"))
+	assert.True(t, ok)
 }
 
 func TestClient_Close(t *testing.T) {
 	conn := amiFakeSrv("Success")
 	client, err := NewClient(conn, "admin", "pass")
 	assert.Nil(t, err)
-	client.AnyEvent()
+	client.AllMessages()
 
-	assert.Equal(t, 1, len(client.subs.subs))
+	assert.Equal(t, 1, len(client.subs.msg))
 
 	client.Close()
 	client.subs.mu.RLock()
-	l := len(client.subs.subs)
+	l := len(client.subs.msg)
 	client.subs.mu.RUnlock()
 	assert.Equal(t, 0, l)
 	_, err = conn.Write([]byte("foo"))
@@ -184,10 +184,10 @@ func TestClient_fails_subscribe_on_closed(t *testing.T) {
 	client.Close()
 	ch := client.OnEvent("NewExten")
 	assert.Nil(t, ch)
-	ch = client.AnyEvent()
+	ch = client.AllMessages()
 	assert.Nil(t, ch)
-	ch = client.Action(NewAction("CoreStatus"))
-	assert.Nil(t, ch)
+	ok := client.Action(NewAction("CoreStatus"))
+	assert.False(t, ok)
 }
 
 func TestClient_Err_channel(t *testing.T) {

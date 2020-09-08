@@ -53,28 +53,30 @@ func NewClient(conn net.Conn, username, password string) (*Client, error) {
 	return client, nil
 }
 
-// AnyEvent	subscribes to any Event received from Asterisk server
+// AllMessages	subscribes to any AMI message received from Asterisk server
 // returns send-only channel or nil
-func (c *Client) AnyEvent() <-chan Message {
-	return c.subs.subAnyEvent()
+func (c *Client) AllMessages() <-chan *Message {
+	return c.subs.subscribe(keyAnyMsg)
 }
 
 // OnEvent subscribes by event by name (case insensative) and
 // returns send-only channel or nil
-func (c *Client) OnEvent(name string) <-chan Message {
-	return c.subs.subByKey(name)
+func (c *Client) OnEvent(name string) <-chan *Message {
+	return c.subs.subscribe(name)
 }
 
 // Action sends AMI message to Asterisk server and returns send-only
 // response channel on nil
-func (c *Client) Action(msg Message) <-chan Message {
+func (c *Client) Action(msg *Message) bool {
 	if msg.ActionID() == "" {
 		msg.AddActionID()
 	}
 
-	actionid := msg.ActionID()
-
-	return c.subs.subByKey(actionid)
+	if err := c.write(msg.Bytes()); err != nil {
+		c.emitError(err)
+		return false
+	}
+	return true
 }
 
 // Close client and destroy all subscriptions to events and action responses
@@ -146,8 +148,8 @@ func (c *Client) login(parentCtx context.Context, tout time.Duration, user, pass
 
 	msg := loginMessage(user, pass)
 
-	reader := func() (chan Message, chan error) {
-		chMsg := make(chan Message)
+	reader := func() (chan *Message, chan error) {
+		chMsg := make(chan *Message)
 		fail := make(chan error)
 		go func() {
 			defer close(chMsg)
@@ -202,14 +204,16 @@ func (c *Client) initReader(ctx context.Context) {
 					c.emitError(err)
 					return
 				}
-				c.publish(ctx, msg)
+				c.publish(msg)
 			}
 		}
 	}()
 }
 
-func (c *Client) publish(ctx context.Context, msg Message) {
-	c.subs.publish(msg)
+func (c *Client) publish(msg *Message) {
+	if msg != nil {
+		c.subs.publish(msg)
+	}
 }
 
 func (c *Client) emitError(err error) {
@@ -238,12 +242,11 @@ func (c *Client) write(msg []byte) error {
 	return nil
 }
 
-func (c *Client) read() (Message, error) {
-	var msg Message
+func (c *Client) read() (*Message, error) {
 	headers, err := c.reader.ReadMIMEHeader()
 	if err != nil {
-		return msg, err
+		return nil, err
 	}
-	msg = newMessage(headers)
+	msg := newMessage(headers)
 	return msg, nil
 }

@@ -56,7 +56,7 @@ func e2eServer(messages []string) *mockSrv {
 	return srv
 }
 
-func TestE2E_AnyEvent(t *testing.T) {
+func TestE2E_AnyMessage(t *testing.T) {
 	srv := e2eServer(getAmiFixtureCall())
 
 	conn, err := net.Dial("tcp", srv.addr)
@@ -66,15 +66,10 @@ func TestE2E_AnyEvent(t *testing.T) {
 	client, err := NewClient(conn, srv.user, srv.pass)
 	defer client.Close()
 	assert.Nil(t, err)
-	ch := client.AnyEvent()
+	ch := client.AllMessages()
 	assert.NotNil(t, ch)
 
-	want := 0
-	for _, m := range getAmiFixtureCall() {
-		if strings.HasPrefix(m, "Event: ") {
-			want++
-		}
-	}
+	want := len(getAmiFixtureCall())
 
 	have := 0
 	for range ch {
@@ -87,6 +82,13 @@ func TestE2E_AnyEvent(t *testing.T) {
 }
 
 func TestE2E_OnEvent(t *testing.T) {
+	want := 0
+	for _, m := range getAmiFixtureCall() {
+		if strings.HasPrefix(m, "Event: Newchannel") {
+			want++
+		}
+	}
+
 	srv := e2eServer(getAmiFixtureCall())
 
 	conn, err := net.Dial("tcp", srv.addr)
@@ -98,13 +100,6 @@ func TestE2E_OnEvent(t *testing.T) {
 	assert.Nil(t, err)
 
 	ch := client.OnEvent("newchannel")
-
-	want := 0
-	for _, m := range getAmiFixtureCall() {
-		if strings.HasPrefix(m, "Event: Newchannel") {
-			want++
-		}
-	}
 
 	have := 0
 	for range ch {

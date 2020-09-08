@@ -8,14 +8,16 @@ import (
 	"net/textproto"
 	"reflect"
 	"strings"
+	"sync"
 )
 
 type Message struct {
 	header textproto.MIMEHeader
+	mu     sync.RWMutex
 }
 
 // NewAction creats action message
-func NewAction(name string) Message {
+func NewAction(name string) *Message {
 	h := make(textproto.MIMEHeader)
 	h.Add("Action", name)
 	a := newMessage(h)
@@ -23,7 +25,7 @@ func NewAction(name string) Message {
 }
 
 // FromJSON creates message from JSON string
-func FromJSON(jstr string) (Message, error) {
+func FromJSON(jstr string) (*Message, error) {
 	var jb interface{}
 	msg := newMessage(textproto.MIMEHeader{})
 
@@ -48,26 +50,28 @@ func FromJSON(jstr string) (Message, error) {
 }
 
 // String return AMI message as string
-func (m Message) String() string {
+func (m *Message) String() string {
 	buf := m.toByteBuf()
 	return buf.String()
 }
 
 // String return AMI message as byte array
-func (m Message) Bytes() []byte {
+func (m *Message) Bytes() []byte {
 	buf := m.toByteBuf()
 	return buf.Bytes()
 }
 
 // Field returns first value associated with the given key
-func (m Message) Field(key string) string {
+func (m *Message) Field(key string) string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.header.Get(key)
 }
 
 // Var search in AMI message fields Variable and ChanVariable for a value
 // of the type key=value or just key. If found, returns value as string
 // and true. Variable name is case sensative.
-func (m Message) Var(key string) (string, bool) {
+func (m *Message) Var(key string) (string, bool) {
 	vars := append(m.FieldValues("variable"), m.FieldValues("chanvariable")...)
 	for _, amivar := range vars {
 		k, v := varsSplit(amivar)
@@ -79,37 +83,43 @@ func (m Message) Var(key string) (string, bool) {
 }
 
 // FieldValues returns all values associated with the given key
-func (m Message) FieldValues(key string) []string {
+func (m *Message) FieldValues(key string) []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.header.Values(key)
 }
 
 // AddField set new field from pair key: value
-func (m Message) AddField(key, value string) {
+func (m *Message) AddField(key, value string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.header.Add(key, value)
 }
 
 // DelField deletes fields associated with key
-func (m Message) DelField(key string) {
+func (m *Message) DelField(key string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
 	m.header.Del(key)
 }
 
 // IsEvent returns true if AMI message is Event
-func (m Message) IsEvent() bool {
+func (m *Message) IsEvent() bool {
 	return m.Field("Event") != ""
 }
 
 // IsResponse returns true if AMI message is Response
-func (m Message) IsResponse() bool {
+func (m *Message) IsResponse() bool {
 	return m.Field("Response") != ""
 }
 
 // IsSuccess returns true if AMI message is Response with value success
-func (m Message) IsSuccess() bool {
+func (m *Message) IsSuccess() bool {
 	return strings.EqualFold(m.Field("Response"), "success")
 }
 
 // AddActionID generate random action id and insert into message
-func (m Message) AddActionID() {
+func (m *Message) AddActionID() {
 	b := make([]byte, 12)
 	if _, err := rand.Read(b); err == nil {
 		m.AddField("ActionID", fmt.Sprintf("%x", b))
@@ -117,7 +127,9 @@ func (m Message) AddActionID() {
 }
 
 // JSON returns AMI message as JSON string
-func (m Message) JSON() string {
+func (m *Message) JSON() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	data := make(map[string]interface{})
 
 	for key, val := range m.header {
@@ -154,17 +166,21 @@ func varsSplit(value string) (string, string) {
 }
 
 // ActionID get AMI message action id as string
-func (m Message) ActionID() string {
+func (m *Message) ActionID() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	return m.header.Get("actionid")
 }
 
-func newMessage(header textproto.MIMEHeader) Message {
-	m := Message{}
+func newMessage(header textproto.MIMEHeader) *Message {
+	m := &Message{}
 	m.header = header
 	return m
 }
 
-func (m Message) toByteBuf() bytes.Buffer {
+func (m *Message) toByteBuf() bytes.Buffer {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 	var buf bytes.Buffer
 	for key := range m.header {
 		for _, val := range m.header.Values(key) {
@@ -178,7 +194,7 @@ func (m Message) toByteBuf() bytes.Buffer {
 	return buf
 }
 
-func loginMessage(username, password string) Message {
+func loginMessage(username, password string) *Message {
 	action := NewAction("Login")
 	action.AddField("Username", username)
 	action.AddField("Secret", password)

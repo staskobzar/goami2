@@ -6,21 +6,22 @@ import (
 )
 
 const (
-	keyAnyEvent = "anyevent"
+	keyAnyMsg = "anymessage"
 )
 
-type pubChan chan Message
-type subChans map[string][]pubChan
+type pubChan chan *Message
+
+type msgChans map[string][]pubChan
 
 type pubsub struct {
-	mu   sync.RWMutex
-	subs subChans
-	off  bool
+	mu  sync.RWMutex
+	msg msgChans
+	off bool
 }
 
 func newPubsub() *pubsub {
 	p := &pubsub{}
-	p.subs = make(subChans)
+	p.msg = make(msgChans)
 	return p
 }
 
@@ -30,27 +31,25 @@ func (ps *pubsub) disable() {
 	ps.off = true
 }
 
-func (ps *pubsub) subAnyEvent() pubChan {
-	return ps.subscribe(keyAnyEvent)
-}
-
-// subscribe to event by name or by action id as key
-func (ps *pubsub) subByKey(key string) pubChan {
-	return ps.subscribe(strings.ToLower(key))
+func (ps *pubsub) lenMsgChans() int {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	return len(ps.msg)
 }
 
 func (ps *pubsub) destroy() {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.off = true
-	for key, subs := range ps.subs {
+	for key, subs := range ps.msg {
 		for _, ch := range subs {
 			close(ch)
 		}
-		delete(ps.subs, key)
+		delete(ps.msg, key)
 	}
 }
 
+// subscribe to event by name or by action id as key
 func (ps *pubsub) subscribe(key string) pubChan {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
@@ -58,61 +57,48 @@ func (ps *pubsub) subscribe(key string) pubChan {
 	if ps.off {
 		return nil
 	}
+	key = strings.ToLower(key)
 
 	ch := make(pubChan)
-	ps.subs[key] = append(ps.subs[key], ch)
+	ps.msg[key] = append(ps.msg[key], ch)
 
 	return ch
 }
 
-func (ps *pubsub) publish(msg Message) bool {
+func (ps *pubsub) publish(msg *Message) bool {
 	if ps.off {
 		return false
 	}
 
+	ps.pubAnyMsg(msg)
+
 	if msg.IsEvent() {
-		ps.pubAnyEvent(msg)
-		ps.pubEvent(msg)
+		name := strings.ToLower(msg.Field("event"))
+		ps.pubEvent(name, msg)
 	}
-	ps.pubByActionID(msg)
 	return true
 }
 
-func (ps *pubsub) pubEvent(msg Message) {
+func (ps *pubsub) pubEvent(name string, msg *Message) {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
 
-	key := strings.ToLower(msg.Field("event"))
-	if subs, ok := ps.subs[key]; ok {
+	if subs, ok := ps.msg[name]; ok {
 		pubToChannels(subs, msg)
 	}
 }
 
-func (ps *pubsub) pubAnyEvent(msg Message) {
+func (ps *pubsub) pubAnyMsg(msg *Message) {
 	ps.mu.RLock()
 	defer ps.mu.RUnlock()
-	if subs, ok := ps.subs[keyAnyEvent]; ok {
+	if subs, ok := ps.msg[keyAnyMsg]; ok {
 		pubToChannels(subs, msg)
 	}
 }
 
-// TODO: delete subscription after publish
-// TODO: lists sending control
-func (ps *pubsub) pubByActionID(msg Message) {
-	actionId := msg.ActionID()
-	if actionId == "" {
-		return
-	}
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-	if subs, ok := ps.subs[actionId]; ok {
-		pubToChannels(subs, msg)
-	}
-}
-
-func pubToChannels(subs []pubChan, msg Message) {
+func pubToChannels(subs []pubChan, msg *Message) {
 	for _, ch := range subs {
-		go func(sub pubChan, m Message) {
+		go func(sub pubChan, m *Message) {
 			sub <- m
 		}(ch, msg)
 	}
