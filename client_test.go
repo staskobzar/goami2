@@ -165,13 +165,10 @@ func TestClient_Close(t *testing.T) {
 	assert.Nil(t, err)
 	client.AllMessages()
 
-	assert.Equal(t, 1, len(client.subs.msg))
+	assert.Equal(t, 1, client.subs.lenMsgChans())
 
 	client.Close()
-	client.subs.mu.RLock()
-	l := len(client.subs.msg)
-	client.subs.mu.RUnlock()
-	assert.Equal(t, 0, l)
+	assert.Equal(t, 0, client.subs.lenMsgChans())
 	_, err = conn.Write([]byte("foo"))
 	assert.NotNil(t, err) // connection is already closed
 }
@@ -199,5 +196,5 @@ func TestClient_Err_channel(t *testing.T) {
 	conn.Close()
 	err = <-client.Err()
 	assert.NotNil(t, err)
-	assert.Contains(t, err.Error(), "on closed")
+	assert.Contains(t, err.Error(), "Network error")
 }

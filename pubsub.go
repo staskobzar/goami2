@@ -11,7 +11,7 @@ const (
 
 type pubChan chan *Message
 
-type msgChans map[string][]pubChan
+type msgChans map[string]pubChan
 
 type pubsub struct {
 	mu  sync.RWMutex
@@ -40,11 +40,12 @@ func (ps *pubsub) lenMsgChans() int {
 func (ps *pubsub) destroy() {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
+	if ps.off {
+		return
+	}
 	ps.off = true
-	for key, subs := range ps.msg {
-		for _, ch := range subs {
-			close(ch)
-		}
+	for key, ch := range ps.msg {
+		close(ch)
 		delete(ps.msg, key)
 	}
 }
@@ -60,46 +61,33 @@ func (ps *pubsub) subscribe(key string) pubChan {
 	key = strings.ToLower(key)
 
 	ch := make(pubChan)
-	ps.msg[key] = append(ps.msg[key], ch)
+	if _, ok := ps.msg[key]; !ok {
+		ps.msg[key] = ch
+	}
 
 	return ch
 }
 
 func (ps *pubsub) publish(msg *Message) bool {
+	ps.mu.RLock()
+	defer ps.mu.RUnlock()
 	if ps.off {
 		return false
 	}
 
-	ps.pubAnyMsg(msg)
-
-	if msg.IsEvent() {
-		name := strings.ToLower(msg.Field("event"))
-		ps.pubEvent(name, msg)
+	if ch, ok := ps.msg[keyAnyMsg]; ok {
+		go func(ch pubChan) {
+			ch <- msg
+		}(ch)
 	}
+
+	if name := strings.ToLower(msg.Field("event")); name != "" {
+		if ch, ok := ps.msg[name]; ok {
+			go func(ch pubChan) {
+				ch <- msg
+			}(ch)
+		}
+	}
+
 	return true
-}
-
-func (ps *pubsub) pubEvent(name string, msg *Message) {
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-
-	if subs, ok := ps.msg[name]; ok {
-		pubToChannels(subs, msg)
-	}
-}
-
-func (ps *pubsub) pubAnyMsg(msg *Message) {
-	ps.mu.RLock()
-	defer ps.mu.RUnlock()
-	if subs, ok := ps.msg[keyAnyMsg]; ok {
-		pubToChannels(subs, msg)
-	}
-}
-
-func pubToChannels(subs []pubChan, msg *Message) {
-	for _, ch := range subs {
-		go func(sub pubChan, m *Message) {
-			sub <- m
-		}(ch, msg)
-	}
 }

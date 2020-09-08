@@ -14,7 +14,7 @@ import "github.com/staskobzar/goami2"
 //.....more code
 
 func main() {
-  conn, err := net.Dial("tcp", "127.0.0.1:5038")
+	conn, err := net.Dial("tcp", "127.0.0.1:5038")
 	if err != nil {
 		log.Fatalln(err)
 	}
@@ -30,9 +30,9 @@ func main() {
 	for {
 		select {
 		case msg := <-chAll:
-      log.Printf("Got message: %s\n", msg.JSON())
+			log.Printf("Got message: %s\n", msg.JSON())
 		case msg := <-chEvt:
-      log.Printf("Got new channel: %s\n", msg.Field("Channel"))
+			log.Printf("Got new channel: %s\n", msg.Field("Channel"))
 		case err := <- client.Error():
 			client.Close()
 			log.Fatalf("Connection error: %s", err)

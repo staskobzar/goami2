@@ -53,10 +53,9 @@ func TestPubsub_subAnyMessage(t *testing.T) {
 
 	ch := ps.subscribe(keyAnyMsg)
 	assert.Equal(t, 1, ps.lenMsgChans())
-	assert.Equal(t, 1, len(ps.msg[keyAnyMsg]))
 	chMatch, ok := ps.msg[keyAnyMsg]
 	assert.True(t, ok)
-	assert.Equal(t, chMatch[0], ch)
+	assert.Equal(t, chMatch, ch)
 }
 
 func TestPubsub_subEvent(t *testing.T) {
@@ -65,10 +64,9 @@ func TestPubsub_subEvent(t *testing.T) {
 
 	ch := ps.subscribe("AgentLogoff")
 	assert.Equal(t, 1, ps.lenMsgChans())
-	assert.Equal(t, 1, len(ps.msg["agentlogoff"]))
 	chMatch, ok := ps.msg["agentlogoff"]
 	assert.True(t, ok)
-	assert.Equal(t, chMatch[0], ch)
+	assert.Equal(t, chMatch, ch)
 }
 
 func TestPubsub_subEvent_disabled(t *testing.T) {
@@ -153,16 +151,11 @@ func TestPubsub_destroy(t *testing.T) {
 	ps.subscribe("QueueMember")
 	ps.subscribe("NewChannel")
 
-	assert.Equal(t, 3, len(ps.msg))
+	assert.Equal(t, 3, ps.lenMsgChans())
 
 	ps.subscribe("NewChannel")
-	assert.Equal(t, 3, len(ps.msg))
+	assert.Equal(t, 3, ps.lenMsgChans())
 
-	chN := 0
-	for _, c := range ps.msg {
-		chN += len(c)
-	}
-	assert.Equal(t, 4, chN)
 	assert.False(t, ps.off)
 
 	ps.destroy()
@@ -170,7 +163,7 @@ func TestPubsub_destroy(t *testing.T) {
 	assert.Equal(t, 0, len(ps.msg))
 }
 
-func TestPubsub_publish_subsucribe_after_destroy(t *testing.T) {
+func TestPubsub_publish_subscribe_after_destroy(t *testing.T) {
 	ps := newPubsub()
 	ch := ps.subscribe(keyAnyMsg)
 	ps.destroy()

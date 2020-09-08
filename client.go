@@ -201,8 +201,10 @@ func (c *Client) initReader(ctx context.Context) {
 					return // already closed
 				}
 				if err != nil {
-					c.emitError(err)
-					return
+					if err == ErrorNet { // only network errors break the loop
+						c.emitError(err)
+						return
+					}
 				}
 				c.publish(msg)
 			}
@@ -245,6 +247,9 @@ func (c *Client) write(msg []byte) error {
 func (c *Client) read() (*Message, error) {
 	headers, err := c.reader.ReadMIMEHeader()
 	if err != nil {
+		if err.Error() == "EOF" || err.Error() == "io: read/write on closed pipe" {
+			return nil, ErrorNet
+		}
 		return nil, err
 	}
 	msg := newMessage(headers)
