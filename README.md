@@ -23,8 +23,8 @@ func main() {
 		log.Fatalln(err)
 	}
 
-	chAll := client.AnyMessage()
-  chEvt := client.OnEvent("Newchannel")
+	chAll := client.AllMessages()
+	chEvt := client.OnEvent("Newchannel")
 
 	defer client.Close()
 	for {
@@ -39,6 +39,7 @@ func main() {
 		}
 	}
 }
+```
 
 ## Usage
 
