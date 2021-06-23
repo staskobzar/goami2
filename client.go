@@ -219,15 +219,14 @@ func (c *Client) publish(msg *Message) {
 }
 
 func (c *Client) emitError(err error) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	if err == nil {
-		return
-	}
-	if c.err == nil {
-		return
-	}
 	go func(err error) {
+		c.mu.Lock()
+		defer c.mu.Unlock()
+		if err == nil || c.err == nil {
+			return
+		}
+		// c.mu.Lock()
+		// defer c.mu.Unlock()
 		c.err <- err
 	}(err)
 }
