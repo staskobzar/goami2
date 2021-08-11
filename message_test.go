@@ -154,6 +154,8 @@ func TestMessage_Var(t *testing.T) {
 	m.AddField("Variable", "extern")
 	m.AddField("ChanVariable", "realm=sip.com")
 	m.AddField("Chanvariable", "account=123")
+	m.AddField("ParkeeChanVariable", "parkctx=acc700")
+	m.AddField("ParkeeChanVariable", "parksrv=pbx001.phone.com")
 
 	v, ok := m.Var("DIR")
 	assert.True(t, ok)
@@ -170,6 +172,14 @@ func TestMessage_Var(t *testing.T) {
 	v, ok = m.Var("extern")
 	assert.True(t, ok)
 	assert.Empty(t, v)
+
+	v, ok = m.Var("parkctx")
+	assert.True(t, ok)
+	assert.Equal(t, "acc700", v)
+
+	v, ok = m.Var("parksrv")
+	assert.True(t, ok)
+	assert.Equal(t, "pbx001.phone.com", v)
 
 	v, ok = m.Var("foo")
 	assert.False(t, ok)

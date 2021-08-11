@@ -78,6 +78,7 @@ func (m *Message) Field(key string) string {
 // and true. Variable name is case sensative.
 func (m *Message) Var(key string) (string, bool) {
 	vars := append(m.FieldValues("variable"), m.FieldValues("chanvariable")...)
+	vars = append(vars, m.FieldValues("ParkeeChanVariable")...)
 	for _, amivar := range vars {
 		k, v := varsSplit(amivar)
 		if k == key {
