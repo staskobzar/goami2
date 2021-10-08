@@ -79,6 +79,10 @@ func (m *Message) Field(key string) string {
 func (m *Message) Var(key string) (string, bool) {
 	vars := append(m.FieldValues("variable"), m.FieldValues("chanvariable")...)
 	vars = append(vars, m.FieldValues("ParkeeChanVariable")...)
+	vars = append(vars, m.FieldValues("OrigTransfererChanVariable")...)
+	vars = append(vars, m.FieldValues("SecondTransfererChanVariable")...)
+	vars = append(vars, m.FieldValues("TransfereeChanVariable")...)
+	vars = append(vars, m.FieldValues("TransferTargetChanVariable")...)
 	for _, amivar := range vars {
 		k, v := varsSplit(amivar)
 		if k == key {

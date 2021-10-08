@@ -156,6 +156,10 @@ func TestMessage_Var(t *testing.T) {
 	m.AddField("Chanvariable", "account=123")
 	m.AddField("ParkeeChanVariable", "parkctx=acc700")
 	m.AddField("ParkeeChanVariable", "parksrv=pbx001.phone.com")
+	m.AddField("OrigTransfererChanVariable", "OTRCV=atcv1000")
+	m.AddField("SecondTransfererChanVariable", "STRCV=atcv2000")
+	m.AddField("TransfereeChanVariable", "TECV=atcv3000")
+	m.AddField("TransferTargetChanVariable", "TTCV=atcv4000")
 
 	v, ok := m.Var("DIR")
 	assert.True(t, ok)
@@ -180,6 +184,22 @@ func TestMessage_Var(t *testing.T) {
 	v, ok = m.Var("parksrv")
 	assert.True(t, ok)
 	assert.Equal(t, "pbx001.phone.com", v)
+
+	v, ok = m.Var("OTRCV")
+	assert.True(t, ok)
+	assert.Equal(t, "atcv1000", v)
+
+	v, ok = m.Var("STRCV")
+	assert.True(t, ok)
+	assert.Equal(t, "atcv2000", v)
+
+	v, ok = m.Var("TECV")
+	assert.True(t, ok)
+	assert.Equal(t, "atcv3000", v)
+
+	v, ok = m.Var("TTCV")
+	assert.True(t, ok)
+	assert.Equal(t, "atcv4000", v)
 
 	v, ok = m.Var("foo")
 	assert.False(t, ok)
