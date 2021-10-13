@@ -1,5 +1,4 @@
 # goami2: Simple Asterisk Manager Interface (AMI) library
-> UNDER CONSTRUCTION
 
 [![Build Status](https://travis-ci.org/staskobzar/goami2.svg?branch=master)](https://travis-ci.org/staskobzar/goami2)
 [![Go Report Card](https://goreportcard.com/badge/github.com/staskobzar/goami2)](https://goreportcard.com/report/github.com/staskobzar/goami2)
