@@ -11,6 +11,7 @@ import (
 	"sync"
 )
 
+// Message AMI message structure
 type Message struct {
 	header textproto.MIMEHeader
 	mu     sync.RWMutex
@@ -60,7 +61,7 @@ func (m *Message) String() string {
 	return buf.String()
 }
 
-// String return AMI message as byte array
+// Bytes return AMI message as byte array
 func (m *Message) Bytes() []byte {
 	buf := m.toByteBuf()
 	return buf.Bytes()

@@ -1,6 +1,8 @@
 # GO AMI v2 protocol implementation
 #
 .PHONY: test cov bench clean
+all: test
+	golint
 
 test:
 	go test -race -cover
