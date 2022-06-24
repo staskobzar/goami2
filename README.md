@@ -112,7 +112,7 @@ Close client and destroy all subscriptions to events and action responses
 ```go
 func (c *Client) Err() <-chan error
 ```
-Err retuns channel for error and signals that client should be probably
+Err returns channel for error and signals that client should be probably
 restarted
 
 #### func (*Client) OnEvent
@@ -120,7 +120,7 @@ restarted
 ```go
 func (c *Client) OnEvent(name string) <-chan *Message
 ```
-OnEvent subscribes by event by name (case insensative) and returns send-only
+OnEvent subscribes by event by name (case insensitive) and returns send-only
 channel or nil
 
 #### type Message

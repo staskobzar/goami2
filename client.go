@@ -53,13 +53,13 @@ func NewClient(conn net.Conn, username, password string) (*Client, error) {
 	return client, nil
 }
 
-// AllMessages	subscribes to any AMI message received from Asterisk server
+// AllMessages subscribes to any AMI message received from Asterisk server
 // returns send-only channel or nil
 func (c *Client) AllMessages() <-chan *Message {
 	return c.subs.subscribe(keyAnyMsg)
 }
 
-// OnEvent subscribes by event by name (case insensative) and
+// OnEvent subscribes by event by name (case insensitive) and
 // returns send-only channel or nil
 func (c *Client) OnEvent(name string) <-chan *Message {
 	return c.subs.subscribe(name)
@@ -90,7 +90,7 @@ func (c *Client) Close() {
 	c.err = nil
 }
 
-// Err retuns channel for error and signals that client should be probably restarted
+// Err returns channel for error and signals that client should be probably restarted
 func (c *Client) Err() <-chan error {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
