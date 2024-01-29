@@ -1,256 +1,209 @@
 package goami2
 
 import (
-	"bufio"
 	"context"
+	"errors"
+	"fmt"
 	"net"
-	"net/textproto"
-	"strings"
 	"sync"
 	"time"
 )
 
-// NetTOUT timeout for net connections and requests
-var NetTOUT = time.Second * 3
-
-// ErrorConnTOUT error on connection timeout
-var ErrorConnTOUT = errorNew("Connection timeout")
-
-// ErrorInvalidPrompt invalid prompt received from AMI server
-var ErrorInvalidPrompt = errorNew("Invalid prompt on AMI server")
-
-// ErrorNet networking errors
-var ErrorNet = errorNew("Network error")
-
-// ErrorLogin AMI server login failed
-var ErrorLogin = errorNew("Login failed")
-
-// Client structure
+// Client is a AMI connection management object
 type Client struct {
-	mu     sync.RWMutex
-	reader *textproto.Reader
-	writer *bufio.Writer
-	conn   net.Conn
-	cancel context.CancelFunc
-	subs   *pubsub
-	err    chan error
+	mu      sync.Mutex
+	conn    net.Conn
+	recv    chan *Message
+	err     chan error
+	timeout time.Duration // connection read/write timeout
 }
 
-// NewClient connects to Asterisk using conn and tries to login using
-// username and password. Creates new AMI client and returns client or error
-func NewClient(conn net.Conn, username, password string) (*Client, error) {
-	client, ctx := newClient(conn)
-	if err := client.readPrompt(ctx, NetTOUT); err != nil {
-		return nil, err
-	}
-
-	if err := client.login(ctx, NetTOUT, username, password); err != nil {
-		return nil, err
-	}
-
-	client.initReader(ctx)
-
-	return client, nil
-}
-
-// AllMessages subscribes to any AMI message received from Asterisk server
-// returns send-only channel or nil
-func (c *Client) AllMessages() <-chan *Message {
-	return c.subs.subscribe(keyAnyMsg)
-}
-
-// OnEvent subscribes by event by name (case insensitive) and
-// returns send-only channel or nil
-func (c *Client) OnEvent(name string) <-chan *Message {
-	return c.subs.subscribe(name)
-}
-
-// Action sends AMI message to Asterisk server and returns send-only
-// response channel on nil
-func (c *Client) Action(msg *Message) bool {
-	if msg.ActionID() == "" {
-		msg.AddActionID()
-	}
-
-	if err := c.write(msg.Bytes()); err != nil {
-		c.emitError(err)
+// Action sends AMI action to an Asterisk server
+// Returns true on success and false if fails
+// This function is deprecated and will be removed
+// Use Send or MustSend instead
+func (c *Client) Action(action *Message) bool {
+	if err := c.MustSend(action.Byte()); err != nil {
 		return false
 	}
 	return true
 }
 
-// Close client and destroy all subscriptions to events and action responses
+// AllMessages returns a channel that receives any AMI messages
+// from the client connection
+func (c *Client) AllMessages() <-chan *Message {
+	return c.recv
+}
+
+// Close client
 func (c *Client) Close() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.cancel()
-	c.subs.destroy()
-	c.conn.Close()
-	close(c.err)
-	c.err = nil
+	if c.conn != nil {
+		_ = c.conn.Close()
+		c.conn = nil
+	}
+	if !isClosedChan(c.recv) {
+		close(c.recv)
+		c.recv = nil
+	}
+	if !isClosedChan(c.err) {
+		close(c.err)
+		c.err = nil
+	}
 }
 
-// Err returns channel for error and signals that client should be probably restarted
+// Err returns channel of errors of the client
 func (c *Client) Err() <-chan error {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
 	return c.err
 }
 
-func newClient(conn net.Conn) (*Client, context.Context) {
-	ctx, cancel := context.WithCancel(context.Background())
-	client := &Client{
-		reader: textproto.NewReader(bufio.NewReader(conn)),
-		writer: bufio.NewWriter(conn),
-		conn:   conn,
-		cancel: cancel,
+// MustSend sends a message to nework and returns
+// network errors if any write away. May block
+// until network timeout
+func (c *Client) MustSend(msg []byte) error {
+	if err := c.setWTimeout(); err != nil {
+		return fmt.Errorf("%w: failed to set net timeout: %q", ErrConn, err)
 	}
-	return client, ctx
-}
-
-func (c *Client) readPrompt(parentCtx context.Context, tout time.Duration) error {
-	ctx, cancel := context.WithTimeout(parentCtx, tout)
-	defer cancel()
-
-	reader := func() (chan string, chan error) {
-		prompt := make(chan string)
-		fail := make(chan error)
-		go func() {
-			defer close(prompt)
-			defer close(fail)
-			line, err := c.reader.ReadLine()
-			if err != nil {
-				fail <- err
-				return
-			}
-			prompt <- line
-		}()
-		return prompt, fail
-	}
-
-	prompt, fail := reader()
-	select {
-	case <-ctx.Done():
-		return ErrorConnTOUT
-	case err := <-fail:
-		return ErrorNet.msg(err.Error())
-	case promptLine := <-prompt:
-		if !strings.HasPrefix(promptLine, "Asterisk Call Manager") {
-			return ErrorInvalidPrompt.msg(promptLine)
-		}
+	if _, err := c.conn.Write(msg); err != nil {
+		return fmt.Errorf("%w: failed send message: %q", ErrConn, err)
 	}
 	return nil
 }
 
-func (c *Client) login(parentCtx context.Context, tout time.Duration, user, pass string) error {
-	ctx, cancel := context.WithTimeout(parentCtx, tout)
-	defer cancel()
-
-	msg := loginMessage(user, pass)
-
-	reader := func() (chan *Message, chan error) {
-		chMsg := make(chan *Message)
-		fail := make(chan error)
-		go func() {
-			defer close(chMsg)
-			defer close(fail)
-			msg, err := c.read()
-			if err != nil {
-				fail <- err
-				return
-			}
-			chMsg <- msg
-		}()
-		return chMsg, fail
-	}
-
-	chMsg, fail := reader()
-	if err := c.write(msg.Bytes()); err != nil {
-		return err
-	}
-
-	select {
-	case <-ctx.Done():
-		return ErrorConnTOUT.msg("failed login")
-	case err := <-fail:
-		return ErrorNet.msg(err.Error())
-	case msg := <-chMsg:
-		if !msg.IsSuccess() {
-			return ErrorLogin
-		}
-	}
-
-	return nil
+// Send AMI message as a bytes array
+// None-blocking method. Any network errors
+// will be send back via Client.Err() channel
+func (c *Client) Send(msg []byte) {
+	go func(message []byte) {
+		_ = c.MustSend(message)
+	}(msg)
 }
 
-func (c *Client) initReader(ctx context.Context) {
-	c.subs = newPubsub()
-	c.err = make(chan error)
-
-	go func() {
-		defer c.subs.disable()
-		for {
-			select {
-			case <-ctx.Done():
-				c.emitError(ctx.Err())
-				return
-			default:
-				msg, err := c.read()
-				if ctx.Err() != nil {
-					c.emitError(ctx.Err())
-					return // already closed
-				}
-				if err != nil {
-					if err == ErrorNet { // only network errors break the loop
-						c.emitError(err)
-						return
-					}
-				}
-				c.publish(msg)
-			}
-		}
-	}()
-}
-
-func (c *Client) publish(msg *Message) {
-	if msg != nil {
-		c.subs.publish(msg)
+// creates Client with default values
+func makeClient(conn net.Conn) *Client {
+	return &Client{
+		conn:    conn,
+		recv:    make(chan *Message, 12),
+		err:     make(chan error, 1),
+		timeout: netTimeout,
 	}
 }
 
-func (c *Client) emitError(err error) {
-	go func(err error) {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		if err == nil || c.err == nil {
+// main consumer loop that reads from connection
+func (c *Client) loop(ctx context.Context) {
+	buf := make([]byte, bufSize)
+	_ = c.conn.SetReadDeadline(time.Time{})
+	for {
+		select {
+		case <-ctx.Done():
+			c.emitErr(ErrEOF)
 			return
+		default:
+			msg, err := c.read(buf)
+			if err != nil {
+				if errors.Is(err, ErrConn) {
+					c.emitErr(fmt.Errorf("%w: conn read error: %s", ErrEOF, err))
+					return
+				}
+				c.emitErr(err)
+				continue
+			}
+
+			c.emitMsg(msg)
 		}
-		// c.mu.Lock()
-		// defer c.mu.Unlock()
-		c.err <- err
-	}(err)
+	}
 }
 
-func (c *Client) write(msg []byte) error {
+func (c *Client) read(buf []byte) (*Message, error) {
+	n, err := c.conn.Read(buf)
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed read: %s", ErrConn, err)
+	}
+	msg, err := Parse(string(buf[:n]))
+	if err != nil {
+		return nil, fmt.Errorf("%w: failed parse AMI message: %s", ErrAMI, err)
+	}
+	return msg, nil
+}
+
+func (c *Client) emitErr(err error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	if _, err := c.writer.Write(msg); err != nil {
-		return err
+	select {
+	case c.err <- err:
+	case <-time.After(chanGiveup):
+		// failed to send and exit here to avoid blocking
 	}
-	if err := c.writer.Flush(); err != nil {
-		return err
+}
+
+func (c *Client) emitMsg(msg *Message) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	select {
+	case c.recv <- msg:
+	case <-time.After(chanGiveup):
+		// failed to send and exit here to avoid blocking
 	}
+}
+
+func (c *Client) login(username, password string) error {
+	// make sure connection is not blocking
+	if err := c.setRTimeout(); err != nil {
+		return fmt.Errorf("%w: failed setup read timeout for login: %s", ErrConn, err)
+	}
+
+	if err := c.setWTimeout(); err != nil {
+		return fmt.Errorf("%w: failed setup read timeout for login: %s", ErrConn, err)
+	}
+
+	// read prompt
+	buf := make([]byte, bufSize)
+	n, err := c.conn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("%w: failed read prompt: %s", ErrConn, err)
+	}
+	if promptPrefix != string(buf[:len(promptPrefix)]) {
+		return fmt.Errorf("%w: unexpected prompt: %q", ErrAMI, buf[:n])
+	}
+
+	// send login
+	login := NewAction("Login")
+	login.AddField("Username", username)
+	login.AddField("Secret", password)
+	if _, err := c.conn.Write(login.Byte()); err != nil {
+		return fmt.Errorf("%w: failed write login: %q", ErrConn, err)
+	}
+
+	// read login response
+	msg, err := c.read(buf)
+	if err != nil {
+		return fmt.Errorf("%w: failed to read login response: %s", ErrAMI, err)
+	}
+
+	if !msg.IsSuccess() {
+		return fmt.Errorf("%w: failed login: %q", ErrAMI, msg.Field("Message"))
+	}
+
 	return nil
 }
 
-func (c *Client) read() (*Message, error) {
-	headers, err := c.reader.ReadMIMEHeader()
-	if err != nil {
-		if err.Error() == "EOF" || err.Error() == "io: read/write on closed pipe" {
-			return nil, ErrorNet
-		}
-		return nil, err
+func (c *Client) setRTimeout() error {
+	return c.conn.SetReadDeadline(time.Now().Add(c.timeout))
+}
+
+func (c *Client) setWTimeout() error {
+	return c.conn.SetWriteDeadline(time.Now().Add(c.timeout))
+}
+
+func isClosedChan[T any](c <-chan T) bool {
+	if c == nil {
+		return true
 	}
-	msg := newMessage(headers)
-	return msg, nil
+	select {
+	case <-c:
+		return true
+	default:
+		return false
+	}
 }
