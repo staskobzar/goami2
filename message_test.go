@@ -1,153 +1,82 @@
 package goami2
 
 import (
-	"fmt"
-	"net/textproto"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
 
-func TestMessage_NewAction(t *testing.T) {
-	a := NewAction("Agents")
-	assert.Equal(t, "Action: Agents\r\n\r\n", a.String())
+func TestMessageNewMessageFields(t *testing.T) {
+	msg := NewMessage()
+	msg.AddField("Event", "NewState")
+	msg.AddField("Channel", "PJSIP/mpgy-0001")
+	msg.AddField("Exten", "31337")
+	msg.AddField("Foo", "bar")
+	msg.AddField("Actionid", "SDY4-12837-123878782")
+	msg.AddField("Context", "inbound")
+	msg.AddField("Bar", "last")
+
+	assert.Equal(t, 7, msg.Len())
+
+	msg.DelField("foo")
+	assert.Equal(t, 6, msg.Len())
+	msg.DelField("ActionID")
+	assert.Equal(t, 5, msg.Len())
+	msg.DelField("Bar")
+	assert.Equal(t, 4, msg.Len())
+
+	want := "Event: NewState\r\nChannel: PJSIP/mpgy-0001\r\n" +
+		"Exten: 31337\r\nContext: inbound\r\n\r\n"
+	assert.Equal(t, want, msg.String())
 }
 
-func TestMessage_AddField(t *testing.T) {
-	a := NewAction("SendText")
-	a.AddField("message", "hello world")
-	want := []string{"Action: SendText\r\n",
-		"Message: hello world\r\n"}
-	assert.Contains(t, a.String(), want[0])
-	assert.Contains(t, a.String(), want[1])
-	assert.True(t, strings.HasSuffix(a.String(), "\r\n\r\n"))
+func TestMessageFieldValues(t *testing.T) {
+	input := "Event: Newstate\r\n" +
+		"Channel: SIP/9170-12-0000003c\r\n" +
+		"CallerIDNum: 9170\r\n" +
+		"CallerIDName: Bud Heller\r\n" +
+		"Exten: 9898\r\n" +
+		"ChanVariable: realm=\r\n" +
+		"ChanVariable: SIPDOMAIN=okon.sip.com\r\n" +
+		"ChanVariable: SIPCALLID=b5ser03agv7huo7faai5\r\n\r\n"
+
+	msg, err := Parse(input)
+	assert.Nil(t, err)
+
+	hdrs := msg.FieldValues("ChanVariable")
+	assert.Equal(t, 3, len(hdrs))
+	assert.Equal(t, "realm=", hdrs[0])
+	assert.Equal(t, "SIPCALLID=b5ser03agv7huo7faai5", hdrs[2])
 }
 
-func TestMessage_Bytes(t *testing.T) {
-	a := NewAction("Agents")
-	assert.Equal(t, []byte("Action: Agents\r\n\r\n"), a.Bytes())
+func TestMessageAction(t *testing.T) {
+	msg := NewAction("Status")
+	assert.Equal(t, "Action: Status\r\n\r\n", msg.String())
+
+	msg.AddField("ActionID", "foo@bar")
+	assert.Equal(t, "foo@bar", msg.ActionID())
+
+	msg.AddActionID()
+	assert.NotEmpty(t, msg.ActionID())
+	assert.NotEqual(t, "foo@bar", msg.ActionID())
 }
 
-func TestMessage_ActionID(t *testing.T) {
-	a := NewAction("CoreStatus")
-	a.AddField("actionid", "foo@123")
-	id := a.ActionID()
-	want := []string{"Action: CoreStatus\r\n", "Actionid: foo@123\r\n"}
-	assert.Contains(t, a.String(), want[0])
-	assert.Contains(t, a.String(), want[1])
-	assert.Equal(t, "foo@123", id)
-	assert.True(t, strings.HasSuffix(a.String(), "\r\n\r\n"))
+func TestMessageSetField(t *testing.T) {
+	msg := NewAction("Status")
+	msg.AddField("Foo", "111")
+
+	assert.Equal(t, "Action: Status\r\nFoo: 111\r\n\r\n", msg.String())
+
+	msg.SetField("Foo", "222")
+	assert.Equal(t, "Action: Status\r\nFoo: 222\r\n\r\n", msg.String())
+
+	msg.SetField("Bar", "333")
+	assert.Equal(t, "Action: Status\r\nFoo: 222\r\nBar: 333\r\n\r\n", msg.String())
 }
 
-func TestMessage_AddActionID(t *testing.T) {
-	a := NewAction("CoreStatus")
-	a.AddActionID()
-	id := a.ActionID()
-
-	want := []string{fmt.Sprintf("Actionid: %s\r\n", id),
-		"Action: CoreStatus\r\n"}
-	assert.True(t, len(id) > 0)
-	assert.Contains(t, a.String(), want[0])
-	assert.Contains(t, a.String(), want[1])
-	assert.True(t, strings.HasSuffix(a.String(), "\r\n\r\n"))
-}
-
-func TestMessage_Field(t *testing.T) {
-	header := textproto.MIMEHeader{"Event": []string{"Newchannel"}}
-	m := newMessage(header)
-	m.AddField("Exten", "31337")
-	m.AddField("Actionid", "SDY4-12837-123878782")
-	m.AddField("Context", "inbound")
-	m.AddField("Variable", "DIR=inbound")
-	m.AddField("Variable", "extern=true")
-	m.AddField("ChanVariable", "realm=sip.pbx.com")
-	m.AddField("ChanVariable", "account=123")
-
-	assert.Equal(t, "31337", m.Field("exten"))
-	assert.Equal(t, "inbound", m.Field("Context"))
-	assert.Equal(t, "", m.Field("Foo"))
-	assert.Equal(t, "DIR=inbound", m.Field("variable"))
-	assert.Equal(t, "realm=sip.pbx.com", m.Field("chanvariable"))
-}
-
-func TestMessage_DelField(t *testing.T) {
-	header := textproto.MIMEHeader{"Event": []string{"Newchannel"}}
-	m := newMessage(header)
-	m.AddField("Exten", "31337")
-	m.AddField("Actionid", "SDY4-12837-123878782")
-	m.AddField("Context", "inbound")
-	m.AddField("Variable", "DIR=inbound")
-	m.AddField("Variable", "extern=true")
-	m.AddField("ChanVariable", "realm=sip.pbx.com")
-	m.AddField("ChanVariable", "account=123")
-
-	assert.Equal(t, "31337", m.Field("exten"))
-	m.DelField("exten")
-	assert.Equal(t, "", m.Field("exten"))
-	assert.ElementsMatch(t, []string{"realm=sip.pbx.com", "account=123"},
-		m.FieldValues("ChanVariable"))
-	m.DelField("chanvariable")
-	assert.Empty(t, m.FieldValues("chanvariable"))
-}
-
-func TestMessage_FieldValues(t *testing.T) {
-	header := textproto.MIMEHeader{"Event": []string{"Newchannel"}}
-	m := newMessage(header)
-	m.AddField("Exten", "31337")
-	m.AddField("Context", "inbound")
-	m.AddField("Variable", "DIR=inbound")
-	m.AddField("Variable", "extern=1")
-	m.AddField("Set", "realm=sip.com")
-	m.AddField("Set", "account=123")
-
-	assert.Equal(t, []string{"31337"}, m.FieldValues("exten"))
-	assert.Equal(t, []string{"inbound"}, m.FieldValues("Context"))
-	assert.ElementsMatch(t, []string{"DIR=inbound", "extern=1"},
-		m.FieldValues("variable"))
-	assert.ElementsMatch(t, []string{"realm=sip.com", "account=123"},
-		m.FieldValues("Set"))
-	assert.Nil(t, m.FieldValues("Foo"))
-}
-
-func TestMessage_IsEvent(t *testing.T) {
-	header := textproto.MIMEHeader{"Event": []string{"Newchannel"}}
-	m := newMessage(header)
-	m.AddField("Exten", "31337")
-	m.AddField("Context", "inbound")
-
-	assert.True(t, m.IsEvent())
-	assert.False(t, m.IsResponse())
-}
-
-func TestMessage_IsResponse(t *testing.T) {
-	header := textproto.MIMEHeader{"Response": []string{"Success"}}
-	m := newMessage(header)
-	m.AddField("Message", "All is good")
-
-	assert.False(t, m.IsEvent())
-	assert.True(t, m.IsResponse())
-}
-
-func TestMessage_IsSuccess(t *testing.T) {
-	header := textproto.MIMEHeader{"Response": []string{"Success"}}
-	m := newMessage(header)
-	m.AddField("Message", "All is good")
-
-	assert.True(t, m.IsSuccess())
-}
-
-func TestMessage_IsSuccess_false(t *testing.T) {
-	header := textproto.MIMEHeader{"Response": []string{"Failed"}}
-	m := newMessage(header)
-	m.AddField("Message", "All failed")
-
-	assert.False(t, m.IsSuccess())
-}
-
-func TestMessage_Var(t *testing.T) {
-	header := textproto.MIMEHeader{"Event": []string{"Newchannel"}}
-	m := newMessage(header)
+func TestMessageVar(t *testing.T) {
+	m := NewMessage()
+	m.AddField("Event", "Newchannel")
 	m.AddField("Exten", "31337")
 	m.AddField("Context", "inbound")
 	m.AddField("Variable", "DIR=inbound")
@@ -161,85 +90,34 @@ func TestMessage_Var(t *testing.T) {
 	m.AddField("TransfereeChanVariable", "TECV=atcv3000")
 	m.AddField("TransferTargetChanVariable", "TTCV=atcv4000")
 
-	v, ok := m.Var("DIR")
-	assert.True(t, ok)
-	assert.Equal(t, "inbound", v)
-
-	v, ok = m.Var("realm")
-	assert.True(t, ok)
-	assert.Equal(t, "sip.com", v)
-
-	v, ok = m.Var("account")
-	assert.True(t, ok)
-	assert.Equal(t, "123", v)
-
-	v, ok = m.Var("extern")
-	assert.True(t, ok)
-	assert.Empty(t, v)
-
-	v, ok = m.Var("parkctx")
-	assert.True(t, ok)
-	assert.Equal(t, "acc700", v)
-
-	v, ok = m.Var("parksrv")
-	assert.True(t, ok)
-	assert.Equal(t, "pbx001.phone.com", v)
-
-	v, ok = m.Var("OTRCV")
-	assert.True(t, ok)
-	assert.Equal(t, "atcv1000", v)
-
-	v, ok = m.Var("STRCV")
-	assert.True(t, ok)
-	assert.Equal(t, "atcv2000", v)
-
-	v, ok = m.Var("TECV")
-	assert.True(t, ok)
-	assert.Equal(t, "atcv3000", v)
-
-	v, ok = m.Var("TTCV")
-	assert.True(t, ok)
-	assert.Equal(t, "atcv4000", v)
-
-	v, ok = m.Var("foo")
-	assert.False(t, ok)
-	assert.Empty(t, v)
-}
-
-func TestMessage_newMessage(t *testing.T) {
-	header := textproto.MIMEHeader{
-		"Event":     []string{"DeviceStateChange"},
-		"Device":    []string{"SIP/9170-12"},
-		"Privilege": []string{"call,all"},
-		"State":     []string{"INUSE"},
+	tests := []struct {
+		key    string
+		exists bool
+		want   string
+	}{
+		{"DIR", true, "inbound"},
+		{"realm", true, "sip.com"},
+		{"account", true, "123"},
+		{"extern", true, ""},
+		{"parkctx", true, "acc700"},
+		{"parksrv", true, "pbx001.phone.com"},
+		{"OTRCV", true, "atcv1000"},
+		{"STRcv", true, "atcv2000"},
+		{"TECV", true, "atcv3000"},
+		{"ttcv", true, "atcv4000"},
+		{"FOO", false, ""},
 	}
-	m := newMessage(header)
-	assert.Contains(t, m.String(), "Event: DeviceStateChange\r\n")
-	assert.Contains(t, m.String(), "State: INUSE\r\n")
-	assert.True(t, strings.HasSuffix(m.String(), "\r\n\r\n"))
-}
 
-func TestMessage_newMessage_Chanvariable(t *testing.T) {
-	header := textproto.MIMEHeader{
-		"Event":  []string{"DeviceStateChange"},
-		"Device": []string{"SIP/9170-12"},
-		"Chanvariable": []string{
-			"realm=okon.ferry.xyz",
-			"SIPDOMAIN=",
-			"SIPCALLID=3aff7b@10.2.3.18:5060",
-		},
-		"State": []string{"INUSE"},
+	for _, tc := range tests {
+		val, ok := m.Var(tc.key)
+		assert.Equal(t, tc.exists, ok, tc.key)
+		assert.Equal(t, tc.want, val, tc.key)
 	}
-	m := newMessage(header)
-	assert.Contains(t, m.String(), "Chanvariable: realm=okon.ferry.xyz\r\n")
-	assert.Contains(t, m.String(), "Chanvariable: SIPDOMAIN=\r\n")
-	assert.Contains(t, m.String(), "Chanvariable: SIPCALLID=3aff7b@10.2.3.18:5060\r\n")
-	assert.True(t, strings.HasSuffix(m.String(), "\r\n\r\n"))
 }
 
-func TestMessage_ToJSON(t *testing.T) {
-	header := textproto.MIMEHeader{"Event": []string{"Newchannel"}}
-	m := newMessage(header)
+func TestMessageJSON(t *testing.T) {
+	m := NewMessage()
+	m.AddField("Event", "Newchannel")
 	m.AddField("Channel", "PJSIP/misspiggy-00000001")
 	m.AddField("Exten", "31337")
 	m.AddField("Actionid", "SDY4-12837-123878782")
@@ -252,9 +130,9 @@ func TestMessage_ToJSON(t *testing.T) {
 	assert.JSONEq(t, want, jstr)
 }
 
-func TestMessage_ToJSON_Variables(t *testing.T) {
-	header := textproto.MIMEHeader{"Event": []string{"Newchannel"}}
-	m := newMessage(header)
+func TestMessageJSONMultiValues(t *testing.T) {
+	m := NewMessage()
+	m.AddField("Event", "Newchannel")
 	m.AddField("Channel", "PJSIP/misspiggy-00000001")
 	m.AddField("Exten", "31337")
 	m.AddField("Actionid", "SDY4-12837-123878782")
@@ -265,32 +143,51 @@ func TestMessage_ToJSON_Variables(t *testing.T) {
 	m.AddField("ChanVariable", "realm=sip.pbx.com")
 	m.AddField("ChanVariable", "account=123")
 
-	jstr := m.JSON()
+	str := m.JSON()
 	want := `{"actionid":"SDY4-12837-123878782","channel":"PJSIP/misspiggy-00000001",` +
 		`"context":"inbound","event":"Newchannel","exten":"31337",` +
 		`"chanvariable":{"account":"123","realm":"sip.pbx.com"},` +
 		`"variable":{"DIR":"inbound","extern":"true","FOO":""}}`
-	assert.JSONEq(t, want, jstr)
+
+	assert.JSONEq(t, want, str)
 }
 
-func TestMessage_ToJSON_Empty(t *testing.T) {
-	m := newMessage(textproto.MIMEHeader{})
+func TestMessageToJSONEmpty(t *testing.T) {
+	m := NewMessage()
 	jstr := m.JSON()
 	assert.Equal(t, "{}", jstr)
 }
 
-func TestMessage_FromJSON(t *testing.T) {
-	jstr := `{"action":"ConfbridgeKick","conference":"Sales",` +
-		`"channel":"Local/Sales-65f4a00b-001"}`
-	m, err := FromJSON(jstr)
-	assert.Nil(t, err)
+func TestMessageFromJSON(t *testing.T) {
+	t.Run("successfully created message", func(t *testing.T) {
+		jstr := `{"action":"ConfbridgeKick","conference":"Sales",` +
+			`"channel":"Local/Sales-65f4a00b-001"}`
+		m, err := FromJSON(jstr)
+		assert.Nil(t, err)
 
-	assert.Equal(t, "ConfbridgeKick", m.Field("Action"))
-	assert.Equal(t, "Sales", m.Field("Conference"))
-	assert.Equal(t, "Local/Sales-65f4a00b-001", m.Field("Channel"))
+		assert.Equal(t, "ConfbridgeKick", m.Field("Action"))
+		assert.Equal(t, "Sales", m.Field("Conference"))
+		assert.Equal(t, "Local/Sales-65f4a00b-001", m.Field("Channel"))
+	})
+
+	t.Run("fail parse from json", func(t *testing.T) {
+		tests := []struct {
+			input string
+			want  error
+		}{
+			{"", ErrAMI},
+			{"foo", ErrAMI},
+			{`{"action":"Foo"`, ErrAMI},
+		}
+
+		for _, tc := range tests {
+			_, err := FromJSON(tc.input)
+			assert.ErrorIs(t, err, tc.want, tc.input)
+		}
+	})
 }
 
-func TestMessage_FromJSON_Multilevel(t *testing.T) {
+func TestMessageFromJSONMultilevel(t *testing.T) {
 	jstr := `{"actionid":"SDY4-12837-123878782","channel":"PJSIP/misspiggy-00000001",` +
 		`"context":"inbound","event":"Newchannel","exten":"31337",` +
 		`"chanvariable":{"account":"123","realm":"sip.pbx.com"},` +
@@ -306,11 +203,4 @@ func TestMessage_FromJSON_Multilevel(t *testing.T) {
 		m.FieldValues("chanvariable"))
 	assert.ElementsMatch(t, []string{"DIR=inbound", "extern=true", "FOO="},
 		m.FieldValues("variable"))
-}
-
-func TestMessage_loginMessage(t *testing.T) {
-	msg := loginMessage("james", "passwd")
-	assert.Equal(t, "Login", msg.Field("action"))
-	assert.Equal(t, "james", msg.Field("Username"))
-	assert.Equal(t, "passwd", msg.Field("Secret"))
 }

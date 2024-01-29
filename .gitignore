@@ -47,4 +47,16 @@ tags
 # Persistent undo
 [._]*.un~
 
+# emacs
+\#*\#
+.\#*
+# flymake-mode
+*_flymake.*
+# projectiles files
+.projectile
+
+# directory configuration
+.dir-locals.el
+
+
 # End of https://www.gitignore.io/api/go,vim,gcov
