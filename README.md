@@ -5,6 +5,7 @@
 [![codecov](https://codecov.io/gh/staskobzar/goami2/branch/master/graph/badge.svg)](https://codecov.io/gh/staskobzar/goami2)
 [![GitHub go.mod Go version of a Go module](https://img.shields.io/github/go-mod/go-version/gomods/athens.svg)](https://github.com/staskobzar/goami2)
 [![GitHub release](https://img.shields.io/github/release/staskobzar/goami2.svg)](https://github.com/staskobzar/goami2/releases)
+[![Go Reference](https://pkg.go.dev/badge/github.com/staskobzar/goami2.svg)](https://pkg.go.dev/github.com/staskobzar/goami2)
 
 Go library that provides interface to Asteris AMI. The library uses given ```net.Conn``` (tcp or tls), login
 and starts reading AMI messages from connection and parse them into ```*Message``` object.
