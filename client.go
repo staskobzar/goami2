@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -116,15 +117,33 @@ func (c *Client) loop(ctx context.Context) {
 }
 
 func (c *Client) read(buf []byte) (*Message, error) {
-	n, err := c.conn.Read(buf)
+	packet, err := readPack(c.conn, buf)
 	if err != nil {
 		return nil, fmt.Errorf("%w: failed read: %s", ErrConn, err)
 	}
-	msg, err := Parse(string(buf[:n]))
+	msg, err := Parse(packet)
 	if err != nil {
 		return nil, fmt.Errorf("%w: failed parse AMI message: %s", ErrAMI, err)
 	}
 	return msg, nil
+}
+
+func readPack(conn net.Conn, buf []byte) (string, error) {
+	var packet string
+	for {
+		n, err := conn.Read(buf)
+		if err != nil {
+			return "", fmt.Errorf("%w: failed read: %s", ErrConn, err)
+		}
+		packet += string(buf[:n])
+		if len(packet) > len(buf) {
+			return "", fmt.Errorf("%w: too long input: %d", ErrAMI, len(packet))
+		}
+
+		if strings.HasSuffix(packet, "\r\n\r\n") {
+			return packet, nil
+		}
+	}
 }
 
 func (c *Client) emitErr(err error) {

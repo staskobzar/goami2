@@ -11,7 +11,7 @@ func TestNewClientContext(t *testing.T) {
 
 	t.Run("fail on login", func(t *testing.T) {
 		connClient, connSrv := net.Pipe()
-		connSrvSess(connSrv, []string{"invalid message\n"})
+		connSrvSess(connSrv, []string{"invalid message\r\n\r\n"})
 
 		_, err := NewClient(connClient, "admin", "pa55w0rd")
 		assert.NotNil(t, err)
