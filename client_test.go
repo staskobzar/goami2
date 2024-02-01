@@ -43,7 +43,7 @@ func TestClientLogin(t *testing.T) {
 	})
 
 	t.Run("fail on invalid AMI message", func(t *testing.T) {
-		connSrvSess(connSrv, []string{"invalid message\n"})
+		connSrvSess(connSrv, []string{"invalid message\r\n\r\n"})
 		err := cl.login("admin", "pwd")
 		assert.ErrorContains(t, err, "failed to read login response")
 	})
@@ -149,7 +149,7 @@ func TestClientLoopRead(t *testing.T) {
 	t.Run("conn read invalid AMI package", func(t *testing.T) {
 		_, connSrv, cl := setup()
 		go cl.loop(context.Background())
-		_, _ = connSrv.Write([]byte("hello\r\nbye\r\n"))
+		_, _ = connSrv.Write([]byte("hello\r\nbye\r\n\r\n"))
 		err := <-cl.Err()
 		assert.ErrorIs(t, err, ErrAMI)
 
@@ -203,4 +203,50 @@ func TestClientWriteToConnection(t *testing.T) {
 		err := cl.MustSend([]byte("must send\n"))
 		assert.ErrorContains(t, err, "io: read/write on closed")
 	})
+}
+
+func TestClientReadPartialNetworkInput(t *testing.T) {
+	tests := map[string]struct {
+		packs []string
+		want  string
+	}{
+		`split in middle`: {
+			[]string{
+				"Event: MoH\r\nChannel: ",
+				"SIP/123-0000ff\r\nExten: 1000\r\n\r\n",
+			},
+			"Event: MoH\r\nChannel: SIP/123-0000ff\r\nExten: 1000\r\n\r\n",
+		},
+		`join last CRLF`: {
+			[]string{
+				"Response: Success\r\nMessage: Access granted\r\n",
+				"\r\n",
+			},
+			"Response: Success\r\nMessage: Access granted\r\n\r\n",
+		},
+		`join last new line`: {
+			[]string{
+				"Response: Success\r\nMessage: Access granted\r\n\r",
+				"\n",
+			},
+			"Response: Success\r\nMessage: Access granted\r\n\r\n",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			r, w := net.Pipe()
+			go func() {
+				for _, input := range tc.packs {
+					_, _ = w.Write([]byte(input))
+				}
+			}()
+
+			buf := make([]byte, bufSize)
+			cl := makeClient(r)
+			msg, err := cl.read(buf)
+			assert.Nil(t, err)
+			assert.Equal(t, tc.want, msg.String())
+		})
+	}
 }

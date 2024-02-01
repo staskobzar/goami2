@@ -60,6 +60,55 @@ func TestParseEvent(t *testing.T) {
 	})
 }
 
+func TestParseEventOK(t *testing.T) {
+	tests := map[string][]string{
+		`endpoint call`:       getAmiFixtureCall(),
+		`call to queue`:       getAmiFixtureQueues(),
+		`queue memeber pause`: getAmiFixtureQueueMembers(),
+		`conference bridge`:   getAmiFixtureConfBridge(),
+	}
+
+	for name, packets := range tests {
+		t.Run(name, func(t *testing.T) {
+			for _, input := range packets {
+				msg, err := Parse(input)
+				assert.Nil(t, err)
+				assert.NotNil(t, msg)
+			}
+		})
+	}
+}
+
+func TestParseEventFail(t *testing.T) {
+	tests := map[string]struct {
+		input string
+		want  string
+	}{
+		`empty string`: {
+			"", "unexpected end of input",
+		},
+		`incomplete packet input`: {
+			"Event: MusicOnHoldStop\r\nPrivilege: call,all\r\nChannel: SIP/1031-12-0000006b\r\nChannelState: 6\r\nChannelStateDesc: Up",
+			"unexpected end of input",
+		},
+		`invalid string`: {
+			"foo bar", "invalid input",
+		},
+		`invalid header`: {
+			"Event: MoH\r\nPriv:all\r\nChan\r\n\r\n", "invalid input",
+		},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			msg, err := Parse(tc.input)
+			assert.ErrorIs(t, err, ErrAMI)
+			assert.ErrorContains(t, err, tc.want)
+			assert.Nil(t, msg)
+		})
+	}
+}
+
 func TestParseResponse(t *testing.T) {
 	input := "Response: Success\r\n" +
 		"ActionID: 175a511275bae@okon.ferry.sip.com\r\n" +
@@ -72,8 +121,6 @@ func TestParseResponse(t *testing.T) {
 	assert.True(t, msg.IsResponse())
 	assert.True(t, msg.IsSuccess())
 }
-
-// TODO: fail parse
 
 func BenchmarkParse(b *testing.B) {
 	for i := 0; i < b.N; i++ {
