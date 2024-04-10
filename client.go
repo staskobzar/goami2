@@ -63,6 +63,9 @@ func (c *Client) Err() <-chan error {
 // network errors if any write away. May block
 // until network timeout
 func (c *Client) MustSend(msg []byte) error {
+	if c.conn == nil {
+		return fmt.Errorf("%w: closed connection: failed to send message", ErrConn)
+	}
 	if err := c.setWTimeout(); err != nil {
 		return fmt.Errorf("%w: failed to set net timeout: %q", ErrConn, err)
 	}
