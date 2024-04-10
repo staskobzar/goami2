@@ -203,6 +203,14 @@ func TestClientWriteToConnection(t *testing.T) {
 		err := cl.MustSend([]byte("must send\n"))
 		assert.ErrorContains(t, err, "io: read/write on closed")
 	})
+
+	t.Run("MustSend returns error when client is closed", func(t *testing.T) {
+		conn, _ := net.Pipe()
+		client := makeClient(conn)
+		client.Close()
+		err := client.MustSend([]byte("must send\n"))
+		assert.ErrorContains(t, err, "closed connection")
+	})
 }
 
 func TestClientReadPartialNetworkInput(t *testing.T) {
