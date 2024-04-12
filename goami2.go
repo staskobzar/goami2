@@ -12,7 +12,7 @@ import (
 const (
 	bufSize      = 1 << 12
 	promptPrefix = "Asterisk Call Manager/"
-	netTimeout   = 2 * time.Second       // default timeout for network read/write
+	netTimeout   = 1 * time.Second       // default timeout for network read/write
 	chanGiveup   = 10 * time.Millisecond // timeout to giveup sending to a channel
 )
 

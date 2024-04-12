@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"context"
 	"net"
+	"strings"
 	"testing"
 	"time"
 
@@ -255,6 +256,44 @@ func TestClientReadPartialNetworkInput(t *testing.T) {
 			msg, err := cl.read(buf)
 			assert.Nil(t, err)
 			assert.Equal(t, tc.want, msg.String())
+		})
+	}
+}
+
+func TestReadConn(t *testing.T) {
+	tests := map[string]struct {
+		input   string
+		bufSize int
+		wantErr error
+	}{
+		`less then buffer`: {
+			"12345\r\n\r\n", 9, nil},
+		`bigger then buffer with full end`: {
+			"1234512345\r\n\r\n", 9, nil},
+		`invalid packet end`: {
+			"123456789", 5, ErrConn},
+		`split to multiple packets`: {
+			strings.Repeat("a", 120) + "\r\n\r\n", 5, nil},
+		`crln split on read`: {
+			"1234\r\n\r\n", 6, nil},
+		`incomplete ending crln`: {
+			"1234\r\n\r", 9, ErrConn},
+	}
+
+	for name, tc := range tests {
+		t.Run(name, func(t *testing.T) {
+			r, w := net.Pipe()
+			assert.Nil(t,
+				r.SetReadDeadline(time.Now().Add(10*time.Millisecond)))
+
+			go func(input string) {
+				_, _ = w.Write([]byte(input))
+			}(tc.input)
+
+			buf := make([]byte, tc.bufSize)
+			data, err := readPack(r, buf)
+			assert.ErrorIs(t, err, tc.wantErr)
+			assert.Equal(t, tc.input, data)
 		})
 	}
 }
