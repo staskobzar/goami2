@@ -136,12 +136,9 @@ func readPack(conn net.Conn, buf []byte) (string, error) {
 	for {
 		n, err := conn.Read(buf)
 		if err != nil {
-			return "", fmt.Errorf("%w: failed read: %s", ErrConn, err)
+			return packet, fmt.Errorf("%w: failed read: %s", ErrConn, err)
 		}
 		packet += string(buf[:n])
-		if len(packet) > len(buf) {
-			return "", fmt.Errorf("%w: too long input: %d", ErrAMI, len(packet))
-		}
 
 		if strings.HasSuffix(packet, "\r\n\r\n") {
 			return packet, nil
