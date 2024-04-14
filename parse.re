@@ -26,8 +26,8 @@ func Parse(data string) (*Message, error) {
 		re2c:tags = 1;
 
 		CRLF  = "\r\n";
-		alpha = [a-zA-Z];
-		name  = alpha (alpha | "-")+;
+		alnum = [a-zA-Z0-9];
+		name  = alnum (alnum | "-")+;
 		value = [^\r\n]+;
 
 		*    { break }
