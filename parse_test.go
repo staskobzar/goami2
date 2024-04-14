@@ -20,6 +20,9 @@ const rawPack = "Event: Newstate\r\n" +
 	"Context: default\r\n" +
 	"Exten: 9898\r\n" +
 	"Priority: 1\r\n" +
+	"Report-005: 52212\r\n" +
+	"Report-006: 65gff5\r\n" +
+	"00A-LRP-001: local\r\n" +
 	"Address-IP: 10.0.0.1\r\n" +
 	"Uniqueid: 1598887681.60\r\n" +
 	"Linkedid: 1598887681.60\r\n" +
@@ -57,6 +60,27 @@ func TestParseEvent(t *testing.T) {
 
 	t.Run("Message to bytes match input", func(t *testing.T) {
 		assert.Equal(t, []byte(input), msg.Byte())
+	})
+
+	t.Run("parse all headers with numbers and dashes in names", func(t *testing.T) {
+		msg, err := Parse(rawPack)
+
+		assert.Nil(t, err)
+		assert.Equal(t, 23, msg.Len())
+
+		assert.Equal(t, "call,all", msg.Field("Privilege"))
+		assert.Equal(t, "SIP/9170-12-0000003c", msg.Field("Channel"))
+		assert.Equal(t, "4", msg.Field("ChannelState"))
+		assert.Equal(t, "Ring", msg.Field("ChannelStateDesc"))
+		assert.Equal(t, "9170", msg.Field("CallerIDNum"))
+		sipdomain, _ := msg.Var("SIPDOMAIN")
+		assert.Equal(t, "okon.sip.com", sipdomain)
+		sipcallid, _ := msg.Var("SIPCALLID")
+		assert.Equal(t, "b5ser03agv7huo7faai5", sipcallid)
+		assert.Equal(t, "Newstate", msg.Field("event"))
+		assert.Equal(t, "local", msg.Field("00A-LRP-001"))
+		assert.Equal(t, "52212", msg.Field("report-005"))
+		assert.Equal(t, "65gff5", msg.Field("Report-006"))
 	})
 }
 

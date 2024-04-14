@@ -26,6 +26,8 @@ func Parse(data string) (*Message, error) {
 	switch (yych) {
 	case '\r':
 		goto yy3
+	case '0','1','2','3','4','5','6','7','8','9':
+		fallthrough
 	case 'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z':
 		fallthrough
 	case 'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z':
@@ -54,6 +56,8 @@ yy4:
 	switch (yych) {
 	case '-':
 		fallthrough
+	case '0','1','2','3','4','5','6','7','8','9':
+		fallthrough
 	case 'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z':
 		fallthrough
 	case 'a','b','c','d','e','f','g','h','i','j','k','l','m','n','o','p','q','r','s','t','u','v','w','x','y','z':
@@ -72,6 +76,8 @@ yy6:
 	yych = data[cur]
 	switch (yych) {
 	case '-':
+		fallthrough
+	case '0','1','2','3','4','5','6','7','8','9':
 		fallthrough
 	case 'A','B','C','D','E','F','G','H','I','J','K','L','M','N','O','P','Q','R','S','T','U','V','W','X','Y','Z':
 		fallthrough
