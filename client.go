@@ -1,8 +1,8 @@
 package goami2
 
 import (
+	"bufio"
 	"context"
-	"errors"
 	"fmt"
 	"net"
 	"strings"
@@ -46,11 +46,9 @@ func (c *Client) Close() {
 	}
 	if !isClosedChan(c.recv) {
 		close(c.recv)
-		c.recv = nil
 	}
 	if !isClosedChan(c.err) {
 		close(c.err)
-		c.err = nil
 	}
 }
 
@@ -96,54 +94,51 @@ func makeClient(conn net.Conn) *Client {
 
 // main consumer loop that reads from connection
 func (c *Client) loop(ctx context.Context) {
-	buf := make([]byte, bufSize)
-	_ = c.conn.SetReadDeadline(time.Time{})
+	chPack, errConn := consume(c.conn)
+	defer c.Close()
 	for {
 		select {
-		case <-ctx.Done():
-			c.emitErr(ErrEOF)
-			return
-		default:
-			msg, err := c.read(buf)
+		case pack := <-chPack:
+			msg, err := Parse(pack)
 			if err != nil {
-				if errors.Is(err, ErrConn) {
-					c.emitErr(fmt.Errorf("%w: conn read error: %s", ErrEOF, err))
-					return
-				}
 				c.emitErr(err)
 				continue
 			}
-
 			c.emitMsg(msg)
+		case <-ctx.Done():
+			c.emitErr(ErrEOF)
+			return
+		case err := <-errConn:
+			c.emitErr(err)
+			return
 		}
 	}
 }
 
-func (c *Client) read(buf []byte) (*Message, error) {
-	packet, err := readPack(c.conn, buf)
-	if err != nil {
-		return nil, fmt.Errorf("%w: failed read: %s", ErrConn, err)
-	}
-	msg, err := Parse(packet)
-	if err != nil {
-		return nil, fmt.Errorf("%w: failed parse AMI message: %s", ErrAMI, err)
-	}
-	return msg, nil
-}
-
-func readPack(conn net.Conn, buf []byte) (string, error) {
-	var packet string
-	for {
-		n, err := conn.Read(buf)
-		if err != nil {
-			return packet, fmt.Errorf("%w: failed read: %s", ErrConn, err)
+// comsume all AMI data from network and split by AMI terminating \r\n\r\n.
+// When found send to main loop to parse or send error and stop on network close
+func consume(conn net.Conn) (chan string, chan error) {
+	_ = conn.SetReadDeadline(time.Time{}) // assure no dealine for reading
+	pack, chErr := make(chan string), make(chan error)
+	go func(chPack chan string, chErr chan error, conn net.Conn) {
+		defer close(chPack)
+		defer close(chErr)
+		reader := bufio.NewReader(conn)
+		buf := &strings.Builder{}
+		for {
+			line, err := reader.ReadString('\n')
+			if err != nil {
+				chErr <- fmt.Errorf("%w: failed read: %s", ErrEOF, err)
+				return
+			}
+			_, _ = buf.WriteString(line)
+			if line == "\r\n" { // end of packet
+				chPack <- buf.String()
+				buf.Reset()
+			}
 		}
-		packet += string(buf[:n])
-
-		if strings.HasSuffix(packet, "\r\n\r\n") {
-			return packet, nil
-		}
-	}
+	}(pack, chErr, conn)
+	return pack, chErr
 }
 
 func (c *Client) emitErr(err error) {
@@ -177,7 +172,7 @@ func (c *Client) login(username, password string) error {
 	}
 
 	// read prompt
-	buf := make([]byte, bufSize)
+	buf := make([]byte, 64) // long enough for prompt
 	n, err := c.conn.Read(buf)
 	if err != nil {
 		return fmt.Errorf("%w: failed read prompt: %s", ErrConn, err)
@@ -195,7 +190,12 @@ func (c *Client) login(username, password string) error {
 	}
 
 	// read login response
-	msg, err := c.read(buf)
+	n, err = c.conn.Read(buf)
+	if err != nil {
+		return fmt.Errorf("%w: failed to read login response: %s", ErrAMI, err)
+	}
+
+	msg, err := Parse(string(buf[:n]))
 	if err != nil {
 		return fmt.Errorf("%w: failed to read login response: %s", ErrAMI, err)
 	}
