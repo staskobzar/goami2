@@ -130,19 +130,21 @@ func TestClientLoopRead(t *testing.T) {
 
 	t.Run("stop on context done", func(t *testing.T) {
 		_, _, cl := setup()
+		chErr := cl.Err()
 		ctx, cancel := context.WithCancel(context.Background())
 		go cl.loop(ctx)
 		cancel()
-		err := <-cl.Err()
+		err := <-chErr
 		assert.ErrorIs(t, err, ErrEOF)
 		cl.Close()
 	})
 
 	t.Run("stop on conn read error", func(t *testing.T) {
 		conn, _, cl := setup()
+		chErr := cl.Err()
 		go cl.loop(context.Background())
 		_ = conn.Close()
-		err := <-cl.Err()
+		err := <-chErr
 		assert.ErrorIs(t, err, ErrEOF)
 		cl.Close()
 	})

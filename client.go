@@ -56,8 +56,6 @@ func (c *Client) Close() {
 
 // Err returns channel of errors of the client
 func (c *Client) Err() <-chan error {
-	c.mu.Lock()
-	defer c.mu.Unlock()
 	return c.err
 }
 
@@ -99,7 +97,6 @@ func makeClient(conn net.Conn) *Client {
 // main consumer loop that reads from connection
 func (c *Client) loop(ctx context.Context) {
 	chPack, errConn := consume(c.conn)
-	defer c.Close()
 	for {
 		select {
 		case pack := <-chPack:
