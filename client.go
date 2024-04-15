@@ -191,7 +191,6 @@ func (c *Client) login(username, password string) error {
 
 	// read login response
 	n, err = c.conn.Read(buf)
-	fmt.Printf("=== response %q\n", buf[:n])
 	if err != nil {
 		return fmt.Errorf("%w: failed to read login response: %s", ErrAMI, err)
 	}
