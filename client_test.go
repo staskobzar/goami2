@@ -85,16 +85,16 @@ func TestClientClose(t *testing.T) {
 
 		cl.Close()
 		assert.Nil(t, cl.conn)
-		assert.Nil(t, cl.recv)
-		assert.Nil(t, cl.err)
+		assert.True(t, isClosedChan(cl.recv))
+		assert.True(t, isClosedChan(cl.err))
 	})
 
 	t.Run("not panic on multiple close call", func(t *testing.T) {
 		cl := setup()
 		cl.Close()
 		assert.Nil(t, cl.conn)
-		assert.Nil(t, cl.recv)
-		assert.Nil(t, cl.err)
+		assert.True(t, isClosedChan(cl.recv))
+		assert.True(t, isClosedChan(cl.err))
 		assert.NotPanics(t, func() { cl.Close() })
 	})
 
@@ -163,8 +163,8 @@ func TestClientLoopRead(t *testing.T) {
 }
 
 func TestClientWriteToConnection(t *testing.T) {
-	connClint, connSrv := net.Pipe()
-	cl := makeClient(connClint)
+	connClient, connSrv := net.Pipe()
+	cl := makeClient(connClient)
 	buf := bufio.NewReader(connSrv)
 
 	t.Run("Send method", func(t *testing.T) {
@@ -196,7 +196,7 @@ func TestClientWriteToConnection(t *testing.T) {
 	})
 
 	t.Run("MustSend and Action fail", func(t *testing.T) {
-		_ = connClint.Close()
+		_ = connClient.Close()
 		msg := NewAction("Uptime")
 		ok := cl.Action(msg)
 		assert.False(t, ok)
@@ -212,88 +212,47 @@ func TestClientWriteToConnection(t *testing.T) {
 		err := client.MustSend([]byte("must send\n"))
 		assert.ErrorContains(t, err, "closed connection")
 	})
+
+	t.Run("MustSend timeout", func(t *testing.T) {
+		conn, _ := net.Pipe()
+		client := makeClient(conn)
+		client.timeout = 1 * time.Millisecond
+		err := client.MustSend([]byte("must send\n"))
+		assert.ErrorContains(t, err, "write pipe: i/o timeout")
+	})
 }
 
-func TestClientReadPartialNetworkInput(t *testing.T) {
-	tests := map[string]struct {
-		packs []string
-		want  string
-	}{
-		`split in middle`: {
-			[]string{
-				"Event: MoH\r\nChannel: ",
-				"SIP/123-0000ff\r\nExten: 1000\r\n\r\n",
-			},
-			"Event: MoH\r\nChannel: SIP/123-0000ff\r\nExten: 1000\r\n\r\n",
-		},
-		`join last CRLF`: {
-			[]string{
-				"Response: Success\r\nMessage: Access granted\r\n",
-				"\r\n",
-			},
-			"Response: Success\r\nMessage: Access granted\r\n\r\n",
-		},
-		`join last new line`: {
-			[]string{
-				"Response: Success\r\nMessage: Access granted\r\n\r",
-				"\n",
-			},
-			"Response: Success\r\nMessage: Access granted\r\n\r\n",
-		},
-	}
+func TestClientLoopStreamRead(t *testing.T) {
+	packets := getAmiFixtureCall()
+	input := strings.Join(packets, "")
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			r, w := net.Pipe()
-			go func() {
-				for _, input := range tc.packs {
-					_, _ = w.Write([]byte(input))
-				}
-			}()
+	connClient, connSrv := net.Pipe()
+	client := makeClient(connClient)
 
-			buf := make([]byte, bufSize)
-			cl := makeClient(r)
-			msg, err := cl.read(buf)
-			assert.Nil(t, err)
-			assert.Equal(t, tc.want, msg.String())
-		})
+	go func() {
+		_, err := connSrv.Write([]byte(input))
+		if err != nil {
+			t.Error(err.Error())
+		}
+	}()
+
+	go client.loop(context.Background())
+
+	for i := 0; i < len(packets); i++ {
+		msg := <-client.AllMessages()
+
+		assert.Equal(t, msg.String(), packets[i])
 	}
 }
 
-func TestReadConn(t *testing.T) {
-	tests := map[string]struct {
-		input   string
-		bufSize int
-		wantErr error
-	}{
-		`less then buffer`: {
-			"12345\r\n\r\n", 9, nil},
-		`bigger then buffer with full end`: {
-			"1234512345\r\n\r\n", 9, nil},
-		`invalid packet end`: {
-			"123456789", 5, ErrConn},
-		`split to multiple packets`: {
-			strings.Repeat("a", 120) + "\r\n\r\n", 5, nil},
-		`crln split on read`: {
-			"1234\r\n\r\n", 6, nil},
-		`incomplete ending crln`: {
-			"1234\r\n\r", 9, ErrConn},
-	}
+func TestIsClosedChan(t *testing.T) {
+	foo := make(chan struct{})
 
-	for name, tc := range tests {
-		t.Run(name, func(t *testing.T) {
-			r, w := net.Pipe()
-			assert.Nil(t,
-				r.SetReadDeadline(time.Now().Add(10*time.Millisecond)))
+	assert.False(t, isClosedChan(foo))
 
-			go func(input string) {
-				_, _ = w.Write([]byte(input))
-			}(tc.input)
+	close(foo)
+	assert.True(t, isClosedChan(foo))
 
-			buf := make([]byte, tc.bufSize)
-			data, err := readPack(r, buf)
-			assert.ErrorIs(t, err, tc.wantErr)
-			assert.Equal(t, tc.input, data)
-		})
-	}
+	foo = nil
+	assert.True(t, isClosedChan(foo))
 }
