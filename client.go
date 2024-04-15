@@ -46,14 +46,18 @@ func (c *Client) Close() {
 	}
 	if !isClosedChan(c.recv) {
 		close(c.recv)
+		c.recv = nil
 	}
 	if !isClosedChan(c.err) {
 		close(c.err)
+		c.err = nil
 	}
 }
 
 // Err returns channel of errors of the client
 func (c *Client) Err() <-chan error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	return c.err
 }
 
