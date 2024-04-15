@@ -172,7 +172,7 @@ func (c *Client) login(username, password string) error {
 	}
 
 	// read prompt
-	buf := make([]byte, 64) // long enough for prompt
+	buf := make([]byte, 1024) // long enough for prompt
 	n, err := c.conn.Read(buf)
 	if err != nil {
 		return fmt.Errorf("%w: failed read prompt: %s", ErrConn, err)
@@ -191,6 +191,7 @@ func (c *Client) login(username, password string) error {
 
 	// read login response
 	n, err = c.conn.Read(buf)
+	fmt.Printf("=== response %q\n", buf[:n])
 	if err != nil {
 		return fmt.Errorf("%w: failed to read login response: %s", ErrAMI, err)
 	}
