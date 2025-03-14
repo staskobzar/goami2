@@ -1,5 +1,7 @@
 # goami2: Simple Asterisk Manager Interface (AMI) library
 
+## line # 1
+
 [![Build Status](https://github.com/staskobzar/goami2/actions/workflows/ci.yml/badge.svg)](https://github.com/staskobzar/goami2/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/staskobzar/goami2)](https://goreportcard.com/report/github.com/staskobzar/goami2)
 [![codecov](https://codecov.io/gh/staskobzar/goami2/branch/master/graph/badge.svg)](https://codecov.io/gh/staskobzar/goami2)
@@ -7,10 +9,10 @@
 [![GitHub release](https://img.shields.io/github/release/staskobzar/goami2.svg)](https://github.com/staskobzar/goami2/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/staskobzar/goami2.svg)](https://pkg.go.dev/github.com/staskobzar/goami2)
 
-Go library that provides interface to Asteris AMI. The library uses given ```net.Conn``` (tcp or tls), login
-and starts reading AMI messages from connection and parse them into ```*Message``` object.
+Go library that provides interface to Asteris AMI. The library uses given `net.Conn` (tcp or tls), login
+and starts reading AMI messages from connection and parse them into `*Message` object.
 Provides simple interface to send messages to AMI.
-It uses ```re2c``` to create very fast protocol parser. Run "make bench" for benchmark tests.
+It uses `re2c` to create very fast protocol parser. Run "make bench" for benchmark tests.
 
 Usage example:
 
@@ -61,4 +63,5 @@ func main() {
 ```
 
 ## Docs
+
 See documentation at [https://pkg.go.dev/github.com/staskobzar/goami2](https://pkg.go.dev/github.com/staskobzar/goami2)
