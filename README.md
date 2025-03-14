@@ -2,6 +2,8 @@
 
 ## line # 1
 
+## line # 2
+
 [![Build Status](https://github.com/staskobzar/goami2/actions/workflows/ci.yml/badge.svg)](https://github.com/staskobzar/goami2/actions/workflows/ci.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/staskobzar/goami2)](https://goreportcard.com/report/github.com/staskobzar/goami2)
 [![codecov](https://codecov.io/gh/staskobzar/goami2/branch/master/graph/badge.svg)](https://codecov.io/gh/staskobzar/goami2)
