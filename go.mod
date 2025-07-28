@@ -1,4 +1,4 @@
-module github.com/staskobzar/goami2
+module github.com/alisyarudin/goami2
 
 go 1.21
 
