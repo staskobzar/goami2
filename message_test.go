@@ -49,6 +49,31 @@ func TestMessageFieldValues(t *testing.T) {
 	assert.Equal(t, "SIPCALLID=b5ser03agv7huo7faai5", hdrs[2])
 }
 
+func TestMessageLocalChannelVar(t *testing.T) {
+	input := "Event: OriginateResponse\r\n" +
+		"Privilege: call,all\r\n" +
+		"SequenceNumber: 1234\r\n" +
+		"ActionID: bob@alice\r\n" +
+		"CallerIDNum: <unknown>\r\n" +
+		"CallerIDName: <unknown>\r\n" +
+		"Channel: Local/1234-12@from-context-0000004d;1\r\n" +
+		"ChanVariable(Local/1234-12@from-context-0000004d;1): realm=myrealm.tld\r\n" +
+		"ChanVariable(Local/1234-12@from-context-0000004d;1): SIPDOMAIN=\r\n" +
+		"ChanVariable(Local/1234-12@from-context-0000004d;1): SIPCALLID=\r\n" +
+		"ChanVariable(Local/1234-12@from-context-0000004d;1): BRIDGEPEER=\r\n" +
+		"ChanVariable(Local/1234-12@from-context-0000004d;1): VM_MESSAGEFILE=\r\n" +
+		"ChanVariable(Local/1234-12@from-context-0000004d;1): SPYMODE=\r\n\r\n"
+	msg, err := Parse(input)
+	assert.Nil(t, err)
+	hdrs := msg.FieldValues("ChanVariable(Local/1234-12@from-context-0000004d;1)")
+	assert.Equal(t, "realm=myrealm.tld", hdrs[0])
+	assert.Equal(t, "SIPDOMAIN=", hdrs[1])
+	assert.Equal(t, "SIPCALLID=", hdrs[2])
+	assert.Equal(t, "BRIDGEPEER=", hdrs[3])
+	assert.Equal(t, "VM_MESSAGEFILE=", hdrs[4])
+	assert.Equal(t, "SPYMODE=", hdrs[5])
+}
+
 func TestMessageAction(t *testing.T) {
 	msg := NewAction("Status")
 	assert.Equal(t, "Action: Status\r\n\r\n", msg.String())

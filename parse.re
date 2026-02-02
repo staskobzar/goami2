@@ -1,6 +1,6 @@
 // -*-go-*-
 //
-//go:generate re2go parser.re -o parser.go -i
+//go:generate re2go parse.re -o parse.go -i --no-generation-date
 
 package goami2
 
@@ -27,7 +27,7 @@ func Parse(data string) (*Message, error) {
 
 		CRLF  = "\r\n";
 		alnum = [a-zA-Z0-9];
-		name  = alnum (alnum | "-")+;
+		name  = alnum (alnum | "-" | "/" | "(" | ")" | "@" | ";")+;
 		value = [^\r\n]+;
 
 		*    { break }
