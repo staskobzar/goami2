@@ -18,7 +18,6 @@ func connSrvSess(conn net.Conn, repl []string) {
 		_, _ = conn.Read(buf)
 		for _, data := range repl {
 			_, _ = conn.Write([]byte(data))
-
 		}
 	}()
 }
@@ -100,13 +99,13 @@ func TestClientClose(t *testing.T) {
 
 	t.Run("not panic on", func(t *testing.T) {
 		tests := map[string]func(*Client){
-			`close conn`: func(cl *Client) { cl.conn.Close() },
+			`close conn`: func(cl *Client) { _ = cl.conn.Close() },
 			`close conn and recv chan`: func(cl *Client) {
-				cl.conn.Close()
+				_ = cl.conn.Close()
 				close(cl.recv)
 			},
 			`close conn and recv and err chan`: func(cl *Client) {
-				cl.conn.Close()
+				_ = cl.conn.Close()
 				close(cl.recv)
 				close(cl.err)
 			},
