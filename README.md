@@ -1,7 +1,6 @@
 # goami2: Simple Asterisk Manager Interface (AMI) library
 
 [![Build Status](https://github.com/staskobzar/goami2/actions/workflows/ci.yml/badge.svg)](https://github.com/staskobzar/goami2/actions/workflows/ci.yml)
-[![Go Report Card](https://goreportcard.com/badge/github.com/staskobzar/goami2)](https://goreportcard.com/report/github.com/staskobzar/goami2)
 [![GitHub go.mod Go version of a Go module](https://img.shields.io/github/go-mod/go-version/gomods/athens.svg)](https://github.com/staskobzar/goami2)
 [![GitHub release](https://img.shields.io/github/release/staskobzar/goami2.svg)](https://github.com/staskobzar/goami2/releases)
 [![Go Reference](https://pkg.go.dev/badge/github.com/staskobzar/goami2.svg)](https://pkg.go.dev/github.com/staskobzar/goami2)
